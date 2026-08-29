@@ -46,7 +46,7 @@ host="$(hostname 2>/dev/null || echo unknown)"
 # [goose args...]`); `--full` / `all` select every extension as an escape
 # hatch. Flags and any subsequent words are forwarded to goose.
 task=""
-geese_args=()
+geose_args=()
 saw_task=0
 for a in "$@"; do
   case "$a" in

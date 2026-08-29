@@ -1,80 +1,76 @@
-# gaggle
+# gaggle 🪿
 
-A gaggle project generated with genproj
+Central agent/MCP configuration resolver. A single server answers **"for this
+`{user, host, task}`, which Goose extensions should be loaded, and with what
+config?"** A `goose` shell wrapper on every host queries it per-launch, writes
+`~/.config/goose/config.yaml`, and execs Goose — killing per-host MCP config
+drift and enabling task-scoped toolsets (context-bloat + cost control).
 
-## Capabilities
+The name: a group of geese is a _gaggle_. The system coordinates a flock of
+MCPs across many hosts as one unit.
 
-This project includes the following capabilities:
+- **Deploy target:** Docker on a Synology DS220+ NAS, Tailscale-only,
+  `http://nas:8780`.
+- **Registry:** `ghcr.io/nickbrett1/gaggle`.
 
-- **Docker**: Docker support for the project.
-- **Node.js DevContainer**: Sets up a VS Code DevContainer with Node.js environment.
-- **SvelteKit**: Initializes a SvelteKit project with Svelte 5.
-- **Docker Container**: Containerize the project and publish to the GitHub Container Registry (GHCR) for deployment to a NAS or self-hosted host via Docker Compose. Mutually exclusive with other deployment systems.
-- **Doppler Secrets Management**: Integrates Doppler for secure secrets management. Enables the various MCP servers that rely on privileged tokens to access their services (e.g. CircleCI, GitHub, SonarQube).
-- **CircleCI Integration**: Configures CircleCI for continuous integration and deployment. Requires Doppler: the CircleCI MCP server needs CircleCI tokens that are only available through Doppler.
-- **ESLint + SonarJS**: Adds fast, zero-configuration code quality linting using eslint-plugin-sonarjs and eslint-plugin-security. Runs in ~5–10s vs 1–2 minutes for SonarCloud.
-- **Editor Configuration**: Standard VS Code extensions and settings.
-- **Shell & Terminal**: Zsh with Powerlevel10k and productivity plugins.
-- **AI Coding Agents (Antigravity)**: Antigravity CLI, Cursor CLI, Svelte MCP, Memos MCP, and Vikunja MCP integration.
+## What it does
 
-## Setup
+| Endpoint                      | Purpose                                                       |
+| ----------------------------- | ------------------------------------------------------------- |
+| `GET /resolve?user&host&task` | Fully resolved extension set + params (JSON)                  |
+| `GET /config?user&host&task`  | Ready-to-write Goose config file (text/plain)                 |
+| `GET /log`                    | Resolve-event request log (filterable)                        |
+| `POST /mcp`                   | Analytics MCP (streamable-HTTP)                               |
+| `/ui`                         | Config console (Extensions / Toolsets / Users / Hosts / Logs) |
 
-1. Clone the repository
-2. Install dependencies:
+### Resolution model
 
-   ```bash
-   npm install
-   ```
+Layered merge (low → high): **global default → host overrides → user
+overrides → task include/exclude → user+task pins**. The server returns the
+final ordered extension list with full per-extension config; the client stays
+a thin renderer. Every `/resolve` and `/config` call is logged to SQLite.
 
-3. Run the dev server:
+### Bundled Goose machinery
 
-   ```bash
-   npm run dev
-   ```
+- **`scripts/goose`** — a pure-shell wrapper. Installs on every host
+  (`goose media`, `goose dev`, `goose --full`, …). Fetches the resolved config
+  with a TTL cache + offline fallback, syncs `nickbrett1/goose-recipes`
+  (default on, `GOOSE_NO_RECIPES=1` to disable), and routes through the
+  Multi-Session Worktree workflow when enabled.
+- **Analytics MCP** — exposes the resolve log: top extensions by host,
+  per-task usage, never-requested extensions, estimated tool-count per set.
 
-## Doppler
+## Constraint ledger (honored)
 
-This project uses Doppler for secrets from the shared `common` project
-(config `dev`) — no per-repo Doppler project is created. First use (links
-the shared project and `dev` config):
+- **No auth** on any route — Tailscale-only trusted network.
+- **No Git-versioned config** — SQLite only (`GAGGLE_DB_PATH`, container sets
+  `/data/gaggle.db`).
+- **No MCP traffic proxying** — the server returns extensions + params only.
+- **No per-repo toolchain config.**
+- **`circleci-build` toolset out of scope** (needs a narrow CircleCI MCP first).
+- Secrets stay in Doppler: extension configs reference env-var keys
+  (`env_keys` / `$KEY` header placeholders) resolved at goose runtime.
 
-```bash
-doppler setup --project common --config dev
-```
+> **Note on config file format:** the installed goose binary (1.48) reads
+> `config.yaml`, not `config.toml` — verified via `goose info`. The wrapper
+> renders `config.yaml`.
 
-If your repo needs app-specific secrets that shouldn't live in the shared
-`common` project, regenerate it with the doppler capability set to
-`projectStrategy: "new"` to get a dedicated project.
-
-The Doppler CLI is installed in the devcontainer — it must be on PATH for the
-VS Code extension and `doppler run` to work. Auth is persisted via the host
-`~/.doppler` bind-mount.
-
-### Env-var precedence (read this if `doppler run` hits the wrong project)
-
-Doppler resolves its target as **environment variables > `doppler.yaml` >
-`~/.doppler` scoped config**. If your shell — or the session that launched
-the devcontainer (e.g. an agent runtime) — exports `DOPPLER_PROJECT` /
-`DOPPLER_CONFIG` / `DOPPLER_ENVIRONMENT`, those silently override this
-repo's `doppler.yaml` and every `doppler` command targets the wrong
-project. The devcontainer's post-create setup pins this repo's context
-(`common`/`dev`) in `~/.bashrc` and `~/.zshrc` and warns at
-setup if resolution still mismatches. To force the correct context manually:
+## Local development
 
 ```bash
-unset DOPPLER_PROJECT DOPPLER_CONFIG DOPPLER_ENVIRONMENT
-doppler setup --no-interactive --project common --config dev
+npm install
+npm run dev            # dev server (defaults to ./data/gaggle.db)
+GAGGLE_DB_PATH=...     # override the SQLite location
+npm test               # vitest + coverage
+npm run lint           # prettier + eslint
+npm run check          # svelte-check
+npm run build          # adapter-node production build
 ```
+
+Seed data (extensions, toolsets, `config_version`) is created on first run.
 
 ## Deployment
 
-See `deploy/README.md` for the deployment runbook (CircleCI -> GHCR ->
-Watchtower -> Docker host). Deploy with:
-
-```bash
-docker compose up -d
-```
-
-## Generated by genproj
-
-This project was generated using the genproj tool.
+See `deploy/README.md` for the CircleCI → GHCR → Watchtower runbook and the
+`docker-compose.yml` (port `127.0.0.1:8780:3000`, SQLite volume mounted at
+`/data`).

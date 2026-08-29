@@ -26,7 +26,7 @@
 #   GAGGLE_CACHE_TTL     seconds to reuse cache without network (default 0 = always fetch)
 #   GOOSE_NO_RECIPES=1   skip the goose-recipes sync
 #   GAGGLE_WORKTREE=1    force-enable the Multi-Session Worktree workflow
-#   GAGGLE_WORKTREE_SCRIPT  path to source for the worktree bootstrap
+#   GAGGLE_WORKTREE_SCRIPT  path to the zsh worktree bootstrap (default: bundled scripts/worktree.zsh)
 #
 set -euo pipefail
 
@@ -37,11 +37,16 @@ GAGGLE_CACHE_TTL="${GAGGLE_CACHE_TTL:-0}"
 RECIPES_REPO="${GOOSE_RECIPES_REPO:-nickbrett1/goose-recipes}"
 GOOSE_RECIPES_DIR="${GOOSE_RECIPES_DIR:-$HOME/.config/goose/recipes}"
 GOOSE_BIN="$(command -v goose || true)"
+# Directory of this script (for locating the bundled worktree.zsh bootstrap).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 
 user="$(whoami 2>/dev/null || echo unknown)"
 host="$(hostname 2>/dev/null || echo unknown)"
 
 # ---- Parse args: optional leading task, rest go to goose ----
+# The first bare word is treated as the task (per the design: `goose [task]
+# [goose args...]`); `--full` / `all` select every extension as an escape
+# hatch. Flags and any subsequent words are forwarded to goose.
 task=""
 goose_args=()
 saw_task=0
@@ -116,23 +121,30 @@ if [[ "${GOOSE_NO_RECIPES:-0}" != "1" ]]; then
   fi
 fi
 
-# ---- Worktree workflow (opt-in, default off) ----
-if [[ "$worktree_enabled" == "1" ]]; then
-  if [[ -n "${GAGGLE_WORKTREE_SCRIPT:-}" && -f "$GAGGLE_WORKTREE_SCRIPT" ]]; then
-    # shellcheck disable=SC1090
-    source "$GAGGLE_WORKTREE_SCRIPT"
-  elif [[ -f "$HOME/.config/goose/worktree.sh" ]]; then
-    # shellcheck disable=SC1090
-    source "$HOME/.config/goose/worktree.sh"
-  else
-    echo "gaggle: worktree enabled but no bootstrap script found — running goose directly" >&2
-  fi
-fi
-
-# ---- Exec goose ----
+# ---- Exec goose (optionally routed through the Multi-Session Worktree
+# workflow, opt-in and default off). The worktree logic is zsh, extracted from
+# .devcontainer/.zshrc into scripts/worktree.zsh; when enabled we exec zsh to
+# run the resolved goose command inside this shell's feature worktree. ----
 if [[ -z "$GOOSE_BIN" ]]; then
   echo "gaggle: 'goose' binary not found on PATH" >&2
   exit 1
+fi
+
+if [[ "$worktree_enabled" == "1" ]]; then
+  # Locate the zsh worktree bootstrap: explicit override → user install → bundled.
+  wt_bootstrap=""
+  if [[ -n "${GAGGLE_WORKTREE_SCRIPT:-}" && -f "$GAGGLE_WORKTREE_SCRIPT" ]]; then
+    wt_bootstrap="$GAGGLE_WORKTREE_SCRIPT"
+  elif [[ -f "$HOME/.config/goose/worktree.zsh" ]]; then
+    wt_bootstrap="$HOME/.config/goose/worktree.zsh"
+  elif [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/worktree.zsh" ]]; then
+    wt_bootstrap="$SCRIPT_DIR/worktree.zsh"
+  fi
+
+  if [[ -n "$wt_bootstrap" ]] && command -v zsh >/dev/null 2>&1; then
+    exec zsh "$wt_bootstrap" "$GOOSE_BIN" "${goose_args[@]}"
+  fi
+  echo "gaggle: worktree enabled but zsh or bootstrap not found — running goose directly" >&2
 fi
 
 exec "$GOOSE_BIN" "${goose_args[@]}"

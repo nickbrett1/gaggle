@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#
+# gaggle — Goose wrapper (pure shell, no build step).
+#
+# Installs/alias this on every host (NAS nick/root, Mac Studio, dev
+# containers). On each launch it:
+#   1. resolves {user, host, task} from the environment + first positional arg
+#   2. pulls a ready-to-write Goose config from the gaggle server
+#      (with a TTL cache + offline fallback)
+#   3. writes it to ~/.config/goose/config.yaml  (goose 1.48 reads YAML)
+#   4. syncs nickbrett1/goose-recipes (default on)
+#   5. execs goose, optionally routing through the Multi-Session Worktree
+#      workflow when enabled
+#
+# Usage:
+#   goose                          -> default toolset
+#   goose media                    -> media toolset
+#   goose container                -> container toolset
+#   goose --full / goose all       -> every extension (escape hatch)
+#   goose dev --model deepseek     -> task + extra goose args
+#
+# Env overrides:
+#   GAGGLE_BASE_URL      server base (default http://nas:8780)
+#   GOOSE_CONFIG_FILE    where to write config (default ~/.config/goose/config.yaml)
+#   GAGGLE_CACHE_FILE    offline cache path (default ~/.cache/gaggle/last-config.yaml)
+#   GAGGLE_CACHE_TTL     seconds to reuse cache without network (default 0 = always fetch)
+#   GOOSE_NO_RECIPES=1   skip the goose-recipes sync
+#   GAGGLE_WORKTREE=1    force-enable the Multi-Session Worktree workflow
+#   GAGGLE_WORKTREE_SCRIPT  path to source for the worktree bootstrap
+#
+set -euo pipefail
+
+GAGGLE_BASE_URL="${GAGGLE_BASE_URL:-http://nas:8780}"
+GOOSE_CONFIG_FILE="${GOOSE_CONFIG_FILE:-$HOME/.config/goose/config.yaml}"
+GAGGLE_CACHE_FILE="${GAGGLE_CACHE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/gaggle/last-config.yaml}"
+GAGGLE_CACHE_TTL="${GAGGLE_CACHE_TTL:-0}"
+RECIPES_REPO="${GOOSE_RECIPES_REPO:-nickbrett1/goose-recipes}"
+GOOSE_RECIPES_DIR="${GOOSE_RECIPES_DIR:-$HOME/.config/goose/recipes}"
+GOOSE_BIN="$(command -v goose || true)"
+
+user="$(whoami 2>/dev/null || echo unknown)"
+host="$(hostname 2>/dev/null || echo unknown)"
+
+# ---- Parse args: optional leading task, rest go to goose ----
+# The first bare word is treated as the task (per the design: `goose [task]
+# [goose args...]`); `--full` / `all` select every extension as an escape
+# hatch. Flags and any subsequent words are forwarded to goose.
+task=""
+geese_args=()
+saw_task=0
+for a in "$@"; do
+  case "$a" in
+    --full | all)
+      task="all"
+      saw_task=1
+      ;;
+    -*)
+      goose_args+=("$a")
+      ;;
+    *)
+      if [[ -z "$task" && "$saw_task" == "0" ]]; then
+        task="$a"
+        saw_task=1
+      else
+        goose_args+=("$a")
+      fi
+      ;;
+  esac
+done
+
+# ---- Resolve + fetch config ----
+fetch_config() {
+  local q="user=$(printf '%s' "$user" | sed 's/ /%20/g')&host=$(printf '%s' "$host" | sed 's/ /%20/g')"
+  if [[ -n "$task" ]]; then q="${q}&task=${task}"; fi
+  curl -fsS --max-time 10 "${GAGGLE_BASE_URL}/config?${q}" -o "${GAGGLE_CACHE_FILE}.tmp"
+  mkdir -p "$(dirname "$GOOSE_CONFIG_FILE")"
+  mv "${GAGGLE_CACHE_FILE}.tmp" "$GOOSE_CONFIG_FILE"
+  cp "$GOOSE_CONFIG_FILE" "$GAGGLE_CACHE_FILE"
+}
+
+mkdir -p "$(dirname "$GAGGLE_CACHE_FILE")"
+used_cache=0
+if [[ -f "$GAGGLE_CACHE_FILE" && "$GAGGLE_CACHE_TTL" -gt 0 ]]; then
+  if command -v stat >/dev/null 2>&1 && command -v date >/dev/null 2>&1; then
+    age=$(( $(date +%s) - $(stat -c %Y "$GAGGLE_CACHE_FILE" 2>/dev/null || echo 0) ))
+    if (( age < GAGGLE_CACHE_TTL )); then used_cache=1; fi
+  fi
+fi
+
+if (( used_cache )); then
+  mkdir -p "$(dirname "$GOOSE_CONFIG_FILE")"
+  cp "$GAGGLE_CACHE_FILE" "$GOOSE_CONFIG_FILE"
+else
+  if ! fetch_config 2>/dev/null; then
+    if [[ -f "$GAGGLE_CACHE_FILE" ]]; then
+      echo "gaggle: server unreachable — using cached config (offline fallback)" >&2
+      mkdir -p "$(dirname "$GOOSE_CONFIG_FILE")"
+      cp "$GAGGLE_CACHE_FILE" "$GOOSE_CONFIG_FILE"
+    else
+      echo "gaggle: server unreachable and no cached config available" >&2
+      exit 1
+    fi
+  fi
+fi
+
+# ---- Worktree flag from config header comments ----
+worktree_enabled=0
+if grep -q '^# worktree.enabled: true' "$GOOSE_CONFIG_FILE" 2>/dev/null; then
+  worktree_enabled=1
+fi
+if [[ "${GAGGLE_WORKTREE:-0}" == "1" ]]; then worktree_enabled=1; fi
+
+# ---- Sync goose-recipes (default on) ----
+if [[ "${GOOSE_NO_RECIPES:-0}" != "1" ]]; then
+  if [[ -d "$GOOSE_RECIPES_DIR/.git" ]]; then
+    (cd "$GOOSE_RECIPES_DIR" && git pull --ff-only >/dev/null 2>&1) || true
+  else
+    git clone --depth 1 "https://github.com/${RECIPES_REPO}.git" "$GOOSE_RECIPES_DIR" >/dev/null 2>&1 || true
+  fi
+fi
+
+# ---- Worktree workflow (opt-in, default off) ----
+if [[ "$worktree_enabled" == "1" ]]; then
+  if [[ -n "${GAGGLE_WORKTREE_SCRIPT:-}" && -f "$GAGGLE_WORKTREE_SCRIPT" ]]; then
+    # shellcheck disable=SC1090
+    source "$GAGGLE_WORKTREE_SCRIPT"
+  elif [[ -f "$HOME/.config/goose/worktree.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/.config/goose/worktree.sh"
+  else
+    echo "gaggle: worktree enabled but no bootstrap script found — running goose directly" >&2
+  fi
+fi
+
+# ---- Exec goose ----
+if [[ -z "$GOOSE_BIN" ]]; then
+  echo "gaggle: 'goose' binary not found on PATH" >&2
+  exit 1
+fi
+
+exec "$GOOSE_BIN" "${goose_args[@]}"

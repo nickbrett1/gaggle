@@ -8,6 +8,10 @@
 
 FROM node:22-slim AS build
 WORKDIR /app
+# better-sqlite3 compiles a native addon; install build tools for the build stage.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* .npmrc* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
@@ -18,6 +22,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 COPY --from=build /app/build ./build
+COPY --from=build /app/package.json ./
+# adapter-node needs the runtime dependencies (incl. better-sqlite3).
+COPY --from=build /app/node_modules ./node_modules
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"

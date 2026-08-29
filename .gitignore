@@ -22,10 +22,12 @@ Thumbs.db
 .antigravitycli
 
 # Optional
-
-
-
-
-
 coverage/
 reports/
+
+# Local SQLite database (never commit; container mounts /data instead)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

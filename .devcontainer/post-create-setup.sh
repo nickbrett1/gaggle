@@ -166,6 +166,39 @@ fi
 echo "INFO: Configuring git safe directory..."
 git config --global --add safe.directory /workspaces/gaggle
 
+echo "INFO: Wiring GitHub auth from Doppler into git..."
+# genproj-github-auth: fetch a GitHub PAT from the repo's Doppler project and
+# configure git so https github.com remotes authenticate automatically
+# (push/pull, submodules, fsck). Runs when Doppler is authenticated; degrades
+# gracefully when it is not (fresh container before cloud_login.sh, or no
+# token present in the Doppler project). Which variable is used: genproj's
+# server-side GitHub auth prefers GITHUB_TOKEN; we probe GITHUB_TOKEN first,
+# then GITHUB_ACCESS_TOKEN, then GITHUB_PERSONAL_ACCESS_TOKEN (in the shared
+# common project these all resolve to the same PAT).
+GH_TOKEN_VALUE=""
+if command -v doppler &> /dev/null && doppler whoami &> /dev/null 2>&1; then
+    for GH_VAR in GITHUB_TOKEN GITHUB_ACCESS_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN; do
+        GH_TOKEN_VALUE="$(doppler run -- printenv "$GH_VAR" 2>/dev/null | tail -n 1)"
+        if [ -n "$GH_TOKEN_VALUE" ]; then
+            echo "INFO: Found GitHub token in Doppler variable $GH_VAR"
+            break
+        fi
+    done
+fi
+
+if [ -n "$GH_TOKEN_VALUE" ]; then
+    # Rewrite https github.com URLs to embed the token. x-access-token is the
+    # conventional username for PAT auth over https; no separate credential
+    # helper is needed. Token stays in ~/.gitconfig (rotated/re-run by
+    # re-running this setup after cloud_login).
+    git config --global url."https://x-access-token:$GH_TOKEN_VALUE@github.com/".insteadOf "https://github.com/"
+    echo "INFO: GitHub auth wired into git (https github.com remotes now authenticate via Doppler)."
+    unset GH_TOKEN_VALUE
+else
+    echo "WARN: No GitHub token found in Doppler (tried GITHUB_TOKEN, GITHUB_ACCESS_TOKEN, GITHUB_PERSONAL_ACCESS_TOKEN)."
+    echo "      git push/pull to github.com will fall back to the VS Code credential helper / manual auth."
+fi
+
 echo "INFO: Installing git pre-commit hooks (lint-staged)..."
 (cd /workspaces/gaggle && npx --yes simple-git-hooks) || echo "WARN: Run 'npx simple-git-hooks' to install hooks manually."
 

@@ -1,9 +1,15 @@
-/** Data access helpers over the SQLite schema. All functions take a db handle. */
+/**
+ * Data access helpers over the SQLite schema (spec §5 "Data / API
+ * expectations"). Two-entity model:
+ *   Tool      — a registered MCP or builtin tool.
+ *   Toolset   — a named, ordered list of tools.
+ *   Consumer  — a `host + user` pair assigned an ordered list of toolsets.
+ */
 
-const EXT_COLS =
+const TOOL_COLS =
   "id, name, kind, transport, config_json, description, tool_count, cost_tier";
 
-export function rowToExtension(row) {
+export function rowToTool(row) {
   if (!row) return null;
   return {
     id: row.id,
@@ -17,22 +23,26 @@ export function rowToExtension(row) {
   };
 }
 
-export function listExtensions(db) {
+// ---------------------------------------------------------------------------
+// Tools (CRUD)
+// ---------------------------------------------------------------------------
+
+export function listTools(db) {
   return db
-    .prepare(`SELECT ${EXT_COLS} FROM extensions ORDER BY id`)
+    .prepare(`SELECT ${TOOL_COLS} FROM tools ORDER BY id`)
     .all()
-    .map(rowToExtension);
+    .map(rowToTool);
 }
 
-export function getExtension(db, id) {
-  return rowToExtension(
-    db.prepare(`SELECT ${EXT_COLS} FROM extensions WHERE id = ?`).get(id),
+export function getTool(db, id) {
+  return rowToTool(
+    db.prepare(`SELECT ${TOOL_COLS} FROM tools WHERE id = ?`).get(id),
   );
 }
 
-export function upsertExtension(db, ext) {
+export function upsertTool(db, tool) {
   db.prepare(
-    `INSERT INTO extensions (id, name, kind, transport, config_json, description, tool_count, cost_tier)
+    `INSERT INTO tools (id, name, kind, transport, config_json, description, tool_count, cost_tier)
      VALUES (@id, @name, @kind, @transport, @config_json, @description, @tool_count, @cost_tier)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
@@ -43,55 +53,67 @@ export function upsertExtension(db, ext) {
        tool_count = excluded.tool_count,
        cost_tier = excluded.cost_tier`,
   ).run({
-    id: ext.id,
-    name: ext.name,
-    kind: ext.kind ?? "mcp",
-    transport: ext.transport,
-    config_json: JSON.stringify(ext.config ?? {}),
-    description: ext.description ?? null,
-    tool_count: ext.tool_count ?? null,
-    cost_tier: ext.cost_tier ?? null,
+    id: tool.id,
+    name: tool.name,
+    kind: tool.kind ?? "mcp",
+    transport: tool.transport,
+    config_json: JSON.stringify(tool.config ?? {}),
+    description: tool.description ?? null,
+    tool_count: tool.tool_count ?? null,
+    cost_tier: tool.cost_tier ?? null,
   });
 }
 
-export function deleteExtension(db, id) {
-  db.prepare("DELETE FROM extensions WHERE id = ?").run(id);
+export function deleteTool(db, id) {
+  db.prepare("DELETE FROM tools WHERE id = ?").run(id);
 }
+
+// ---------------------------------------------------------------------------
+// Toolsets (CRUD + ordered membership)
+// ---------------------------------------------------------------------------
 
 export function listToolsets(db) {
   return db
-    .prepare("SELECT id, include_json, exclude_json FROM toolsets ORDER BY id")
+    .prepare(
+      "SELECT id, name, description, tool_ids_json FROM toolsets ORDER BY id",
+    )
     .all()
     .map((r) => ({
       id: r.id,
-      include: JSON.parse(r.include_json || "[]"),
-      exclude: JSON.parse(r.exclude_json || "[]"),
+      name: r.name ?? r.id,
+      description: r.description,
+      tool_ids: JSON.parse(r.tool_ids_json || "[]"),
     }));
 }
 
 export function getToolset(db, id) {
   const r = db
-    .prepare("SELECT id, include_json, exclude_json FROM toolsets WHERE id = ?")
+    .prepare(
+      "SELECT id, name, description, tool_ids_json FROM toolsets WHERE id = ?",
+    )
     .get(id);
   if (!r) return null;
   return {
     id: r.id,
-    include: JSON.parse(r.include_json || "[]"),
-    exclude: JSON.parse(r.exclude_json || "[]"),
+    name: r.name ?? r.id,
+    description: r.description,
+    tool_ids: JSON.parse(r.tool_ids_json || "[]"),
   };
 }
 
 export function upsertToolset(db, ts) {
   db.prepare(
-    `INSERT INTO toolsets (id, include_json, exclude_json)
-     VALUES (@id, @include_json, @exclude_json)
+    `INSERT INTO toolsets (id, name, description, tool_ids_json)
+     VALUES (@id, @name, @description, @tool_ids_json)
      ON CONFLICT(id) DO UPDATE SET
-       include_json = excluded.include_json,
-       exclude_json = excluded.exclude_json`,
+       name = excluded.name,
+       description = excluded.description,
+       tool_ids_json = excluded.tool_ids_json`,
   ).run({
     id: ts.id,
-    include_json: JSON.stringify(ts.include ?? []),
-    exclude_json: JSON.stringify(ts.exclude ?? []),
+    name: ts.name ?? ts.id,
+    description: ts.description ?? null,
+    tool_ids_json: JSON.stringify(ts.tool_ids ?? []),
   });
 }
 
@@ -99,141 +121,62 @@ export function deleteToolset(db, id) {
   db.prepare("DELETE FROM toolsets WHERE id = ?").run(id);
 }
 
-export function listHostRules(db) {
+// ---------------------------------------------------------------------------
+// Consumers (CRUD + toolset assignment)
+// ---------------------------------------------------------------------------
+
+export function listConsumers(db) {
   return db
     .prepare(
-      "SELECT host, defaults_json, overrides_json FROM host_rules ORDER BY host",
+      "SELECT id, user, host, toolset_ids_json FROM consumers ORDER BY id",
     )
     .all()
     .map((r) => ({
+      id: r.id,
+      user: r.user,
       host: r.host,
-      defaults: JSON.parse(r.defaults_json || "null"),
-      overrides: JSON.parse(r.overrides_json || "null"),
+      toolset_ids: JSON.parse(r.toolset_ids_json || "[]"),
     }));
 }
 
-export function getHostRule(db, host) {
+export function getConsumer(db, id) {
   const r = db
     .prepare(
-      "SELECT host, defaults_json, overrides_json FROM host_rules WHERE host = ?",
+      "SELECT id, user, host, toolset_ids_json FROM consumers WHERE id = ?",
     )
-    .get(host);
+    .get(id);
   if (!r) return null;
   return {
+    id: r.id,
+    user: r.user,
     host: r.host,
-    defaults: JSON.parse(r.defaults_json || "null"),
-    overrides: JSON.parse(r.overrides_json || "null"),
+    toolset_ids: JSON.parse(r.toolset_ids_json || "[]"),
   };
 }
 
-export function upsertHostRule(db, rule) {
+export function upsertConsumer(db, consumer) {
   db.prepare(
-    `INSERT INTO host_rules (host, defaults_json, overrides_json)
-     VALUES (@host, @defaults_json, @overrides_json)
-     ON CONFLICT(host) DO UPDATE SET
-       defaults_json = excluded.defaults_json,
-       overrides_json = excluded.overrides_json`,
+    `INSERT INTO consumers (id, user, host, toolset_ids_json)
+     VALUES (@id, @user, @host, @toolset_ids_json)
+     ON CONFLICT(id) DO UPDATE SET
+       user = excluded.user,
+       host = excluded.host,
+       toolset_ids_json = excluded.toolset_ids_json`,
   ).run({
-    host: rule.host,
-    defaults_json: rule.defaults ? JSON.stringify(rule.defaults) : null,
-    overrides_json: rule.overrides ? JSON.stringify(rule.overrides) : null,
+    id: consumer.id,
+    user: consumer.user,
+    host: consumer.host,
+    toolset_ids_json: JSON.stringify(consumer.toolset_ids ?? []),
   });
 }
 
-export function deleteHostRule(db, host) {
-  db.prepare("DELETE FROM host_rules WHERE host = ?").run(host);
+export function deleteConsumer(db, id) {
+  db.prepare("DELETE FROM consumers WHERE id = ?").run(id);
 }
 
-export function listUserRules(db) {
-  return db
-    .prepare(
-      "SELECT user, defaults_json, overrides_json FROM user_rules ORDER BY user",
-    )
-    .all()
-    .map((r) => ({
-      user: r.user,
-      defaults: JSON.parse(r.defaults_json || "null"),
-      overrides: JSON.parse(r.overrides_json || "null"),
-    }));
-}
-
-export function getUserRule(db, user) {
-  const r = db
-    .prepare(
-      "SELECT user, defaults_json, overrides_json FROM user_rules WHERE user = ?",
-    )
-    .get(user);
-  if (!r) return null;
-  return {
-    user: r.user,
-    defaults: JSON.parse(r.defaults_json || "null"),
-    overrides: JSON.parse(r.overrides_json || "null"),
-  };
-}
-
-export function upsertUserRule(db, rule) {
-  db.prepare(
-    `INSERT INTO user_rules (user, defaults_json, overrides_json)
-     VALUES (@user, @defaults_json, @overrides_json)
-     ON CONFLICT(user) DO UPDATE SET
-       defaults_json = excluded.defaults_json,
-       overrides_json = excluded.overrides_json`,
-  ).run({
-    user: rule.user,
-    defaults_json: rule.defaults ? JSON.stringify(rule.defaults) : null,
-    overrides_json: rule.overrides ? JSON.stringify(rule.overrides) : null,
-  });
-}
-
-export function deleteUserRule(db, user) {
-  db.prepare("DELETE FROM user_rules WHERE user = ?").run(user);
-}
-
-export function listUserTaskPins(db) {
-  return db
-    .prepare(
-      "SELECT user, task, overrides_json FROM user_task_pins ORDER BY user, task",
-    )
-    .all()
-    .map((r) => ({
-      user: r.user,
-      task: r.task,
-      overrides: JSON.parse(r.overrides_json || "null"),
-    }));
-}
-
-export function getUserTaskPin(db, user, task) {
-  const r = db
-    .prepare(
-      "SELECT user, task, overrides_json FROM user_task_pins WHERE user = ? AND task = ?",
-    )
-    .get(user, task);
-  if (!r) return null;
-  return {
-    user: r.user,
-    task: r.task,
-    overrides: JSON.parse(r.overrides_json || "null"),
-  };
-}
-
-export function upsertUserTaskPin(db, pin) {
-  db.prepare(
-    `INSERT INTO user_task_pins (user, task, overrides_json)
-     VALUES (@user, @task, @overrides_json)
-     ON CONFLICT(user, task) DO UPDATE SET overrides_json = excluded.overrides_json`,
-  ).run({
-    user: pin.user,
-    task: pin.task,
-    overrides_json: pin.overrides ? JSON.stringify(pin.overrides) : null,
-  });
-}
-
-export function deleteUserTaskPin(db, user, task) {
-  db.prepare("DELETE FROM user_task_pins WHERE user = ? AND task = ?").run(
-    user,
-    task,
-  );
-}
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
 
 export function getSetting(db, key) {
   const r = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
@@ -246,6 +189,10 @@ export function setSetting(db, key, value) {
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
   ).run(key, value);
 }
+
+// ---------------------------------------------------------------------------
+// Resolve history
+// ---------------------------------------------------------------------------
 
 export function logResolveEvent(
   db,
@@ -264,7 +211,10 @@ export function logResolveEvent(
   );
 }
 
-export function listResolveEvents(db, { user, host, task, limit = 100 } = {}) {
+export function listResolveEvents(
+  db,
+  { user, host, task, tool, from, to, limit = 100 } = {},
+) {
   const where = [];
   const params = [];
   if (user) {
@@ -279,31 +229,45 @@ export function listResolveEvents(db, { user, host, task, limit = 100 } = {}) {
     where.push("task = ?");
     params.push(task);
   }
+  // Normalize date-only filters to the day's bounds so ts comparisons are intuitive.
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  if (from) {
+    where.push("ts >= ?");
+    params.push(DAY.test(from) ? `${from}T00:00:00.000Z` : from);
+  }
+  if (to) {
+    where.push("ts <= ?");
+    params.push(DAY.test(to) ? `${to}T23:59:59.999Z` : to);
+  }
   const sql =
     `SELECT id, ts, user, host, task, ext_ids_json, config_version FROM resolve_events` +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     ` ORDER BY id DESC LIMIT ?`;
   params.push(limit);
-  return db
-    .prepare(sql)
-    .all(...params)
-    .map((r) => ({
-      id: r.id,
-      ts: r.ts,
-      user: r.user,
-      host: r.host,
-      task: r.task,
-      ext_ids: JSON.parse(r.ext_ids_json || "[]"),
-      config_version: r.config_version,
-    }));
+  const rows = db.prepare(sql).all(...params);
+  let events = rows.map((r) => ({
+    id: r.id,
+    ts: r.ts,
+    user: r.user,
+    host: r.host,
+    task: r.task,
+    ext_ids: JSON.parse(r.ext_ids_json || "[]"),
+    config_version: r.config_version,
+  }));
+  // The `tool` filter (does the event include this tool?) is applied in JS
+  // because it lives inside ext_ids_json.
+  if (tool) {
+    events = events.filter((ev) => ev.ext_ids.includes(tool));
+  }
+  return events;
 }
 
-/** Map of extension id -> extension row, for the resolver. */
-export function getExtensionMap(db) {
+/** Map of tool id -> tool row, for the resolver. */
+export function getToolMap(db) {
   return new Map(
     db
-      .prepare(`SELECT ${EXT_COLS} FROM extensions`)
+      .prepare(`SELECT ${TOOL_COLS} FROM tools`)
       .all()
-      .map((r) => [r.id, rowToExtension(r)]),
+      .map((r) => [r.id, rowToTool(r)]),
   );
 }

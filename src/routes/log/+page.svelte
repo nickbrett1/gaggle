@@ -3,15 +3,20 @@
 </script>
 
 <div class="spread">
-	<h2>Resolve log</h2>
+	<h2>History log</h2>
+	<p class="muted">Append-only, read-only — what each consumer got at what time.</p>
 </div>
 
 <div class="card">
-	<form method="GET" action="/ui/logs" class="row">
+	<form method="GET" action="/log" class="row">
 		<input name="user" value={data.filters.user ?? ""} placeholder="user" style="flex:1" />
 		<input name="host" value={data.filters.host ?? ""} placeholder="host" style="flex:1" />
-		<input name="task" value={data.filters.task ?? ""} placeholder="task" style="flex:1" />
+		<input name="task" value={data.filters.task ?? ""} placeholder="toolset / task" style="flex:1" />
+		<input name="tool" value={data.filters.tool ?? ""} placeholder="tool id" style="flex:1" />
+		<input name="from" type="date" value={data.filters.from ?? ""} title="From" style="flex:1" />
+		<input name="to" type="date" value={data.filters.to ?? ""} title="To" style="flex:1" />
 		<button class="primary" type="submit">Filter</button>
+		<a class="btn" href="/log">Reset</a>
 	</form>
 </div>
 
@@ -23,8 +28,8 @@
 				<th>Time</th>
 				<th>User</th>
 				<th>Host</th>
-				<th>Task</th>
-				<th>Extensions</th>
+				<th>Toolset</th>
+				<th>Tools</th>
 				<th>Ver</th>
 			</tr>
 		</thead>

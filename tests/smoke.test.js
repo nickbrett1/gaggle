@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/svelte";
 import Page from "../src/routes/+page.svelte";
 import { GET as healthGET } from "../src/routes/health/+server.js";
 import { GET as resolveGET } from "../src/routes/resolve/+server.js";
-import { GET as logGET } from "../src/routes/log/+server.js";
+import { GET as logGET } from "../src/routes/api/log/+server.js";
 import { POST as mcpPOST } from "../src/routes/mcp/+server.js";
 
 // Use a fresh in-memory database for all API tests in this process.
@@ -16,9 +16,16 @@ function route(url) {
 }
 
 describe("generated app smoke test", () => {
-  it("renders the home page with gaggle heading", () => {
+  it("renders the landing page with gaggle heading", () => {
     render(Page, {
-      props: { data: { extension_count: 0, toolset_count: 0, event_count: 0 } },
+      props: {
+        data: {
+          toolsets: [],
+          consumers: [],
+          tool_count: 0,
+          event_count: 0,
+        },
+      },
     });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
       "gaggle",
@@ -31,7 +38,7 @@ describe("generated app smoke test", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("resolve returns the media toolset for nick@nas", async () => {
+  it("resolve returns the media toolset for nick@nas task=media", async () => {
     const res = resolveGET(
       route("http://localhost/resolve?user=nick&host=nas&task=media"),
     );
@@ -45,12 +52,17 @@ describe("generated app smoke test", () => {
     ]);
   });
 
-  it("resolve returns default [memos] with no task", async () => {
+  it("resolve returns a consumer's assigned union (nick@nas -> media)", async () => {
     const res = resolveGET(
       route("http://localhost/resolve?user=nick&host=nas"),
     );
     const body = await res.json();
-    expect(body.extensions.map((e) => e.id)).toEqual(["memos"]);
+    expect(body.extensions.map((e) => e.id)).toEqual([
+      "igdb",
+      "jelu",
+      "memos",
+      "catalog",
+    ]);
   });
 
   it("mcp lists tools and calls list_resolve_events", async () => {
@@ -67,7 +79,7 @@ describe("generated app smoke test", () => {
     expect(names).toContain("estimated_tool_count");
   });
 
-  it("mcp tools/call returns events and logs route returns them", async () => {
+  it("mcp tools/call returns events and the log API returns them", async () => {
     const call = await mcpPOST({
       request: {
         json: () =>
@@ -83,7 +95,7 @@ describe("generated app smoke test", () => {
     expect(callBody.result.isError).toBe(false);
     expect(callBody.result.content[0].text).toContain("igdb");
 
-    const res = logGET(route("http://localhost/log"));
+    const res = logGET(route("http://localhost/api/log"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.events.length).toBeGreaterThanOrEqual(1);

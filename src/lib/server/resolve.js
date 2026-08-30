@@ -1,19 +1,5 @@
 import * as store from "./store.js";
 
-function applyOverrides(set, overrides) {
-  if (!overrides) return set;
-  let next = [...set];
-  if (Array.isArray(overrides.remove)) {
-    next = next.filter((id) => !overrides.remove.includes(id));
-  }
-  if (Array.isArray(overrides.add)) {
-    for (const id of overrides.add) {
-      if (!next.includes(id)) next.push(id);
-    }
-  }
-  return next;
-}
-
 function booleanSetting(db, key, fallback) {
   const v = store.getSetting(db, key);
   if (v === null || v === undefined || v === "") return fallback;
@@ -21,55 +7,46 @@ function booleanSetting(db, key, fallback) {
 }
 
 /**
- * Layered resolution engine (spec §5).
+ * Resolution engine (spec §0 — the new two-entity model).
  *
- * Layer order (low -> high): global default -> host overrides -> user
- * overrides -> task include/exclude -> user+task pins.
+ * There is no precedence layering. A consumer's resolved set is the literal
+ * union of its assigned toolsets, in toolset order (deduplicated, order
+ * preserved). Resolution order:
+ *   1. `task === "all"`        -> every known tool (escape hatch: `goose --full`).
+ *   2. `task` names a toolset  -> that toolset, exactly (keeps the wrapper's
+ *                                 `goose media` / `goose dev` quick selectors working).
+ *   3. a consumer exists for `user@host` -> the consumer's assigned toolsets.
+ *   4. otherwise (unknown consumer)      -> the `default` toolset.
  */
 export function resolve(db, { user, host, task } = {}) {
-  const extMap = store.getExtensionMap(db);
+  const toolMap = store.getToolMap(db);
+  let toolIds = [];
 
-  // 1. Global default
-  const globalDefault = store.getToolset(db, "default");
-  let set = globalDefault ? [...globalDefault.include] : [];
-  if (globalDefault)
-    set = set.filter((id) => !globalDefault.exclude.includes(id));
-
-  // 2. Host overrides
-  const hostRule = host ? store.getHostRule(db, host) : null;
-  if (hostRule) {
-    if (Array.isArray(hostRule.defaults)) set = [...hostRule.defaults];
-    set = applyOverrides(set, hostRule.overrides);
-  }
-
-  // 3. User overrides
-  const userRule = user ? store.getUserRule(db, user) : null;
-  if (userRule) {
-    if (Array.isArray(userRule.defaults)) set = [...userRule.defaults];
-    set = applyOverrides(set, userRule.overrides);
-  }
-
-  // 4. Task include/exclude
   if (task === "all") {
-    // Escape hatch (goose --full / goose all): every known extension.
-    set = [...extMap.keys()];
-  } else if (task) {
-    const ts = store.getToolset(db, task);
-    if (ts) {
-      set = [...ts.include];
-      set = set.filter((id) => !ts.exclude.includes(id));
+    toolIds = [...toolMap.keys()];
+  } else if (task && store.getToolset(db, task)) {
+    toolIds = [...store.getToolset(db, task).tool_ids];
+  } else {
+    const consumer =
+      user && host ? store.getConsumer(db, `${user}@${host}`) : null;
+    if (consumer) {
+      for (const tsId of consumer.toolset_ids) {
+        const ts = store.getToolset(db, tsId);
+        if (ts) {
+          for (const tid of ts.tool_ids) {
+            if (!toolIds.includes(tid)) toolIds.push(tid);
+          }
+        }
+      }
+    } else {
+      const def = store.getToolset(db, "default");
+      if (def) toolIds = [...def.tool_ids];
     }
   }
 
-  // 5. User + task pins
-  if (user) {
-    const pin = store.getUserTaskPin(db, user, task || "default");
-    if (pin) set = applyOverrides(set, pin.overrides);
-  }
-
-  // Finalize: drop unknown extensions, preserve order.
-  const ordered = set.filter((id) => extMap.has(id));
-  const extensions = ordered.map((id) => extMap.get(id));
+  // Finalize: drop unknown tools, preserve order.
+  const ordered = toolIds.filter((id) => toolMap.has(id));
+  const tools = ordered.map((id) => toolMap.get(id));
 
   const recipesEnabled = booleanSetting(db, "recipes.enabled", true);
   const worktreeEnabled = booleanSetting(db, "worktree.enabled", false);
@@ -79,7 +56,7 @@ export function resolve(db, { user, host, task } = {}) {
     user: user ?? null,
     host: host ?? null,
     task: task ?? null,
-    extensions,
+    extensions: tools,
     recipes: { enabled: recipesEnabled },
     worktree: { enabled: worktreeEnabled },
     config_version: configVersion,

@@ -7,8 +7,14 @@ export function load({ url }) {
     user: url.searchParams.get("user") ?? undefined,
     host: url.searchParams.get("host") ?? undefined,
     task: url.searchParams.get("task") ?? undefined,
+    tool: url.searchParams.get("tool") ?? undefined,
+    from: url.searchParams.get("from") ?? undefined,
+    to: url.searchParams.get("to") ?? undefined,
   };
   const limit = Number(url.searchParams.get("limit") ?? 200);
-  const events = listResolveEvents(db, { ...filters, limit });
+  const events = listResolveEvents(db, {
+    ...filters,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : 200,
+  });
   return { events, filters };
 }

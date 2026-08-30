@@ -6,10 +6,10 @@ function freshDb() {
   return openDb(":memory:");
 }
 
-describe("store CRUD", () => {
-  it("upserts and deletes extensions", () => {
+describe("store CRUD (two-entity model)", () => {
+  it("upserts and deletes tools", () => {
     const db = freshDb();
-    store.upsertExtension(db, {
+    store.upsertTool(db, {
       id: "x",
       name: "X",
       kind: "mcp",
@@ -17,68 +17,48 @@ describe("store CRUD", () => {
       config: { transport: "stdio", command: "cmd", args: ["a"] },
       description: "d",
     });
-    expect(store.getExtension(db, "x").name).toBe("X");
-    expect(store.getExtension(db, "x").config.command).toBe("cmd");
-    store.upsertExtension(db, {
+    expect(store.getTool(db, "x").name).toBe("X");
+    expect(store.getTool(db, "x").config.command).toBe("cmd");
+    store.upsertTool(db, {
       id: "x",
       name: "X2",
       kind: "mcp",
       transport: "stdio",
       config: { transport: "stdio", command: "cmd", args: [] },
     });
-    expect(store.getExtension(db, "x").name).toBe("X2");
-    store.deleteExtension(db, "x");
-    expect(store.getExtension(db, "x")).toBeNull();
+    expect(store.getTool(db, "x").name).toBe("X2");
+    store.deleteTool(db, "x");
+    expect(store.getTool(db, "x")).toBeNull();
   });
 
-  it("upserts and deletes toolsets", () => {
+  it("upserts and deletes toolsets with ordered membership", () => {
     const db = freshDb();
-    store.upsertToolset(db, { id: "t", include: ["a", "b"], exclude: ["c"] });
+    store.upsertToolset(db, {
+      id: "t",
+      name: "T",
+      description: "desc",
+      tool_ids: ["a", "b"],
+    });
     const ts = store.getToolset(db, "t");
-    expect(ts.include).toEqual(["a", "b"]);
-    expect(ts.exclude).toEqual(["c"]);
+    expect(ts.tool_ids).toEqual(["a", "b"]);
+    expect(ts.name).toBe("T");
     store.deleteToolset(db, "t");
     expect(store.getToolset(db, "t")).toBeNull();
   });
 
-  it("upserts and deletes host rules", () => {
+  it("upserts and deletes consumers", () => {
     const db = freshDb();
-    store.upsertHostRule(db, {
+    store.upsertConsumer(db, {
+      id: "nick@nas",
+      user: "nick",
       host: "nas",
-      defaults: ["memos"],
-      overrides: { add: ["dozzle"], remove: [] },
+      toolset_ids: ["media"],
     });
-    const rule = store.getHostRule(db, "nas");
-    expect(rule.defaults).toEqual(["memos"]);
-    expect(rule.overrides.add).toEqual(["dozzle"]);
-    store.deleteHostRule(db, "nas");
-    expect(store.getHostRule(db, "nas")).toBeNull();
-  });
-
-  it("upserts and deletes user rules", () => {
-    const db = freshDb();
-    store.upsertUserRule(db, {
-      user: "nick",
-      defaults: null,
-      overrides: { add: ["github"], remove: [] },
-    });
-    expect(store.getUserRule(db, "nick").overrides.add).toEqual(["github"]);
-    store.deleteUserRule(db, "nick");
-    expect(store.getUserRule(db, "nick")).toBeNull();
-  });
-
-  it("upserts, reads and deletes user task pins", () => {
-    const db = freshDb();
-    store.upsertUserTaskPin(db, {
-      user: "nick",
-      task: "media",
-      overrides: { add: ["github"], remove: ["jelu"] },
-    });
-    expect(store.getUserTaskPin(db, "nick", "media").overrides.remove).toEqual([
-      "jelu",
-    ]);
-    store.deleteUserTaskPin(db, "nick", "media");
-    expect(store.getUserTaskPin(db, "nick", "media")).toBeNull();
+    const c = store.getConsumer(db, "nick@nas");
+    expect(c.user).toBe("nick");
+    expect(c.toolset_ids).toEqual(["media"]);
+    store.deleteConsumer(db, "nick@nas");
+    expect(store.getConsumer(db, "nick@nas")).toBeNull();
   });
 
   it("reads and writes settings", () => {
@@ -89,7 +69,7 @@ describe("store CRUD", () => {
     expect(store.getSetting(db, "nope")).toBeNull();
   });
 
-  it("lists resolve events with filters", () => {
+  it("lists resolve events with filters, including by tool", () => {
     const db = freshDb();
     store.logResolveEvent(db, {
       user: "nick",
@@ -110,5 +90,28 @@ describe("store CRUD", () => {
     const media = store.listResolveEvents(db, { user: "nick" });
     expect(media).toHaveLength(1);
     expect(media[0].ext_ids).toEqual(["a", "b"]);
+    const withA = store.listResolveEvents(db, { tool: "a" });
+    expect(withA).toHaveLength(1);
+    expect(withA[0].id).toBe(media[0].id);
+  });
+
+  it("filters resolve events by date range", () => {
+    const db = freshDb();
+    store.logResolveEvent(db, {
+      user: "nick",
+      host: "nas",
+      task: "media",
+      extIds: ["a"],
+      configVersion: 3,
+    });
+    const all = store.listResolveEvents(db, {
+      from: "2000-01-01",
+      to: "2000-01-01",
+    });
+    expect(all).toHaveLength(0);
+    const today = store.listResolveEvents(db, {
+      from: new Date().toISOString().slice(0, 10),
+    });
+    expect(today).toHaveLength(1);
   });
 });

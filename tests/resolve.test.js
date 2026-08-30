@@ -7,8 +7,8 @@ function freshDb() {
   return openDb(":memory:");
 }
 
-describe("resolution engine", () => {
-  it("resolves the media toolset with full per-extension config", () => {
+describe("resolution engine (consumer model)", () => {
+  it("resolves a toolset by name with full per-tool config", () => {
     const db = freshDb();
     const res = resolve(db, { user: "nick", host: "nas", task: "media" });
     expect(res.extensions.map((e) => e.id)).toEqual([
@@ -24,40 +24,66 @@ describe("resolution engine", () => {
     ]);
   });
 
-  it("resolves default [memos] when no task is given", () => {
+  it("resolves a consumer to the literal union of its assigned toolsets", () => {
     const db = freshDb();
+    // nick@nas is seeded with [media].
     const res = resolve(db, { user: "nick", host: "nas" });
-    expect(res.extensions.map((e) => e.id)).toEqual(["memos"]);
-  });
-
-  it("applies host overrides above the default", () => {
-    const db = freshDb();
-    store.upsertHostRule(db, {
-      host: "nas",
-      defaults: null,
-      overrides: { add: ["github"], remove: [] },
-    });
-    const res = resolve(db, { user: "nick", host: "nas" });
-    expect(res.extensions.map((e) => e.id)).toEqual(["memos", "github"]);
-  });
-
-  it("applies user+task pins above the task set", () => {
-    const db = freshDb();
-    store.upsertUserTaskPin(db, {
-      user: "nick",
-      task: "media",
-      overrides: { add: ["github"], remove: ["jelu"] },
-    });
-    const res = resolve(db, { user: "nick", host: "nas", task: "media" });
     expect(res.extensions.map((e) => e.id)).toEqual([
       "igdb",
+      "jelu",
       "memos",
       "catalog",
-      "github",
     ]);
   });
 
-  it("logs a resolve event that /log returns", () => {
+  it("resolves a consumer with multiple toolsets as an ordered union", () => {
+    const db = freshDb();
+    store.upsertConsumer(db, {
+      id: "x@y",
+      user: "x",
+      host: "y",
+      toolset_ids: ["dev", "container"],
+    });
+    const res = resolve(db, { user: "x", host: "y" });
+    // dev = [github, memos]; container = [dozzle, memos] -> dedup memos.
+    expect(res.extensions.map((e) => e.id)).toEqual([
+      "github",
+      "memos",
+      "dozzle",
+    ]);
+  });
+
+  it("falls back to the default toolset for an unknown consumer", () => {
+    const db = freshDb();
+    const res = resolve(db, { user: "nobody", host: "nowhere" });
+    expect(res.extensions.map((e) => e.id)).toEqual(["memos"]);
+  });
+
+  it("returns every tool for task=all (escape hatch)", () => {
+    const db = freshDb();
+    const res = resolve(db, { user: "nick", host: "nas", task: "all" });
+    expect(res.extensions.map((e) => e.id).sort()).toEqual(
+      [
+        "memos",
+        "igdb",
+        "jelu",
+        "catalog",
+        "dozzle",
+        "circleci-cost",
+        "phoenix",
+        "github",
+      ].sort(),
+    );
+  });
+
+  it("drops unknown tool ids from a toolset", () => {
+    const db = freshDb();
+    store.upsertToolset(db, { id: "odd", tool_ids: ["memos", "ghost"] });
+    const res = resolve(db, { user: "a", host: "b", task: "odd" });
+    expect(res.extensions.map((e) => e.id)).toEqual(["memos"]);
+  });
+
+  it("logs a resolve event that listResolveEvents returns", () => {
     const db = freshDb();
     const res = resolve(db, { user: "nick", host: "nas", task: "dev" });
     store.logResolveEvent(db, {

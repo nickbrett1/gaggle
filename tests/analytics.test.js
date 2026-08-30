@@ -83,7 +83,6 @@ describe("analytics", () => {
       task: "media",
     });
     expect(out.extension_count).toBe(4);
-    expect(out.extensions).toBeUndefined();
     expect(out.known_tool_counts).toHaveLength(4);
   });
 

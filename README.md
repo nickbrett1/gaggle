@@ -1,7 +1,7 @@
 # gaggle 🪿
 
 Central agent/MCP configuration resolver. A single server answers **"for this
-`{user, host, task}`, which Goose extensions should be loaded, and with what
+`{user, host}`, which Goose extensions should be loaded, and with what
 config?"** A `goose` shell wrapper on every host queries it per-launch, writes
 `~/.config/goose/config.yaml`, and execs Goose — killing per-host MCP config
 drift and enabling task-scoped toolsets (context-bloat + cost control).
@@ -13,22 +13,71 @@ MCPs across many hosts as one unit.
   `http://nas:8780`.
 - **Registry:** `ghcr.io/nickbrett1/gaggle`.
 
+## The model (two entities, no precedence)
+
+This is a deliberately flat, two-entity model — **no inheritance, no fallback,
+no precedence layering**.
+
+- **Tool** — a registered MCP or builtin tool, with its full config
+  (`kind`, `transport`, and `url` or `command/args/env`).
+- **Toolset** — a named, **ordered** list of tools.
+- **Consumer** — a `host + user` pair (e.g. `nick@nas`) that is **directly
+  assigned one or more toolsets**.
+
+A consumer's resolved set is the **literal union of its assigned toolsets, in
+toolset order** (deduplicated, order preserved). `nick@macstudio` and
+`nick@nas` are completely independent. `task` is retained only as a legacy
+wrapper convenience: `task` naming a toolset selects that toolset directly
+(`goose media`, `goose dev`), and `task=all` is the `goose --full` escape hatch
+that returns every known tool.
+
 ## What it does
 
-| Endpoint                      | Purpose                                                       |
-| ----------------------------- | ------------------------------------------------------------- |
-| `GET /resolve?user&host&task` | Fully resolved extension set + params (JSON)                  |
-| `GET /config?user&host&task`  | Ready-to-write Goose config file (text/plain)                 |
-| `GET /log`                    | Resolve-event request log (filterable)                        |
-| `POST /mcp`                   | Analytics MCP (streamable-HTTP)                               |
-| `/ui`                         | Config console (Extensions / Toolsets / Users / Hosts / Logs) |
+| Route                    | Purpose                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `GET /resolve?user&host` | Resolved tool set + params (JSON) — consumer's union |
+| `GET /config?user&host`  | Ready-to-write Goose config file (text/plain)        |
+| `GET /api/log`           | Resolve-event request log (JSON, filterable)         |
+| `POST /mcp`              | Analytics MCP (streamable-HTTP)                      |
+| `/`                      | Console landing — the two questions (dashboard)      |
+| `/toolsets`              | Console — manage tools within a toolset (op #1)      |
+| `/consumers`             | Console — assign toolsets to a consumer (op #2)      |
+| `/tools`                 | Console — tool catalog (op #3)                       |
+| `/log`                   | Console — history log (append-only, read-only)       |
 
-### Resolution model
+### The two landing-page questions
 
-Layered merge (low → high): **global default → host overrides → user
-overrides → task include/exclude → user+task pins**. The server returns the
-final ordered extension list with full per-extension config; the client stays
-a thin renderer. Every `/resolve` and `/config` call is logged to SQLite.
+The dashboard answers both at a glance:
+
+1. **Toolset-oriented:** what toolsets exist, what tools are in each, and which
+   consumers receive each.
+2. **Consumer-oriented:** what each consumer resolves to (which toolsets →
+   which tools).
+
+### Resolution
+
+- A consumer resolves to the **ordered union of its assigned toolsets**.
+- Unknown consumer → the `default` toolset.
+- `task` naming a toolset → that toolset, exactly.
+- `task=all` → every known tool.
+
+Every `/resolve` and `/config` call is logged to SQLite (append-only history).
+
+### The three operations (primary workflows)
+
+1. **Manage tools within a toolset** — add/remove/reorder tools, create/edit/
+   rename/delete toolsets. Deleting a toolset warns about consumers that will
+   lose it.
+2. **Assign toolsets to a consumer** — edit which toolsets a `host+user` pair
+   receives, with a live "what resolves" preview.
+3. **Add a new tool** — register an MCP/builtin tool with its full config
+   upfront; a tool must exist in the catalog before it can be added to a
+   toolset. Deleting a tool warns about toolsets that still include it.
+
+**UX rules:** no precedence language anywhere; live previews when editing;
+reverse lookups everywhere (every tool shows where it's used, every toolset
+shows who consumes it); dangerous deletes warn; order shown = order served by
+`/resolve`.
 
 ### Bundled Goose machinery
 
@@ -37,19 +86,20 @@ a thin renderer. Every `/resolve` and `/config` call is logged to SQLite.
   with a TTL cache + offline fallback, syncs `nickbrett1/goose-recipes`
   (default on, `GOOSE_NO_RECIPES=1` to disable), and routes through the
   Multi-Session Worktree workflow when enabled.
-- **Analytics MCP** — exposes the resolve log: top extensions by host,
-  per-task usage, never-requested extensions, estimated tool-count per set.
+- **Analytics MCP** — exposes the resolve log: top tools by host, per-task
+  usage, never-requested tools, estimated tool-count per set.
 
 ## Constraint ledger (honored)
 
 - **No auth** on any route — Tailscale-only trusted network.
 - **No Git-versioned config** — SQLite only (`GAGGLE_DB_PATH`, container sets
   `/data/gaggle.db`).
-- **No MCP traffic proxying** — the server returns extensions + params only.
+- **No MCP traffic proxying** — the server returns tools + params only.
 - **No per-repo toolchain config.**
 - **`circleci-build` toolset out of scope** (needs a narrow CircleCI MCP first).
-- Secrets stay in Doppler: extension configs reference env-var keys
+- Secrets stay in Doppler: tool configs reference env-var keys
   (`env_keys` / `$KEY` header placeholders) resolved at goose runtime.
+- **Analytics/dashboards/charts deferred** — history log only for this pass.
 
 > **Note on config file format:** the installed goose binary (1.48) reads
 > `config.yaml`, not `config.toml` — verified via `goose info`. The wrapper
@@ -67,7 +117,9 @@ npm run check          # svelte-check
 npm run build          # adapter-node production build
 ```
 
-Seed data (extensions, toolsets, `config_version`) is created on first run.
+Seed data (tools, toolsets, known consumers, `config_version`) is created on
+first run; a best-effort migration carries the old schema's extensions and
+toolsets forward.
 
 ## Deployment
 

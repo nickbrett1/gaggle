@@ -1,7 +1,13 @@
 /**
- * Bootstrap data for gaggle (spec §4).
+ * Bootstrap data for gaggle (spec §0 "model change" + §5 "seed migration").
  *
- * Extensions carry a normalized config object:
+ * Model: two entities —
+ *   Tool      — a registered MCP or builtin tool (full config, no secrets).
+ *   Toolset   — a named, ordered list of tools.
+ *   Consumer  — a `host + user` pair directly assigned an ordered list of
+ *               toolsets. No inheritance, no fallback, no precedence layering.
+ *
+ * Tools carry a normalized config object:
  *   { transport: "streamable-http"|"stdio",
  *     uri?: string,                       // streamable-http
  *     command?: string, args?: string[],  // stdio
@@ -10,11 +16,11 @@
  *     headers?: [{ key, value }],         // value may contain $KEY placeholders
  *     timeout?: number }
  *
- * Secrets are never stored here: extensions reference environment variables
- * via `env`/`fromEnv` (injected by Doppler at wrapper runtime).
+ * Secrets are never stored here: tools reference environment variables via
+ * `env`/`fromEnv` (injected by Doppler at wrapper runtime).
  */
 
-export const SEED_EXTENSIONS = [
+export const SEED_TOOLS = [
   {
     id: "memos",
     name: "Memos",
@@ -136,51 +142,110 @@ export const SEED_EXTENSIONS = [
   },
 ];
 
+/**
+ * Toolsets preserve tool order; that order is what /resolve returns.
+ * Memberships carry over verbatim from the original design memo.
+ */
 export const SEED_TOOLSETS = [
-  { id: "default", include: ["memos"], exclude: [] },
-  { id: "media", include: ["igdb", "jelu", "memos", "catalog"], exclude: [] },
-  { id: "container", include: ["dozzle", "memos"], exclude: [] },
+  {
+    id: "default",
+    name: "Default",
+    description: "Baseline for every new host.",
+    tool_ids: ["memos"],
+  },
+  {
+    id: "media",
+    name: "Media",
+    description: "Games, reading & catalog lookups.",
+    tool_ids: ["igdb", "jelu", "memos", "catalog"],
+  },
+  {
+    id: "container",
+    name: "Container",
+    description: "Container logs & diagnostics.",
+    tool_ids: ["dozzle", "memos"],
+  },
   {
     id: "llm-cost",
-    include: ["circleci-cost", "memos", "phoenix"],
-    exclude: [],
+    name: "LLM Cost",
+    description: "Spend & tracing analysis.",
+    tool_ids: ["circleci-cost", "memos", "phoenix"],
   },
-  { id: "dev", include: ["github", "memos"], exclude: [] },
+  {
+    id: "dev",
+    name: "Dev",
+    description: "Everyday development tools.",
+    tool_ids: ["github", "memos"],
+  },
+];
+
+/**
+ * Seed consumers from the known host/user pairs. Each consumer is assigned
+ * toolsets directly — there is no inheritance or fallback between them.
+ */
+export const SEED_CONSUMERS = [
+  { id: "nick@nas", user: "nick", host: "nas", toolset_ids: ["media"] },
+  {
+    id: "nick@macstudio",
+    user: "nick",
+    host: "macstudio",
+    toolset_ids: ["dev"],
+  },
+  { id: "root@nas", user: "root", host: "nas", toolset_ids: ["container"] },
 ];
 
 export function seed(conn) {
-  const insertExt = conn.prepare(
-    `INSERT OR IGNORE INTO extensions
+  const insertTool = conn.prepare(
+    `INSERT OR IGNORE INTO tools
        (id, name, kind, transport, config_json, description, tool_count, cost_tier)
      VALUES (@id, @name, @kind, @transport, @config_json, @description, @tool_count, @cost_tier)`,
   );
-  for (const ext of SEED_EXTENSIONS) {
-    insertExt.run({
-      id: ext.id,
-      name: ext.name,
-      kind: ext.kind,
-      transport: ext.transport,
-      config_json: JSON.stringify(ext.config),
-      description: ext.description ?? null,
-      tool_count: ext.tool_count ?? null,
-      cost_tier: ext.cost_tier ?? null,
+  for (const tool of SEED_TOOLS) {
+    insertTool.run({
+      id: tool.id,
+      name: tool.name,
+      kind: tool.kind,
+      transport: tool.transport,
+      config_json: JSON.stringify(tool.config),
+      description: tool.description ?? null,
+      tool_count: tool.tool_count ?? null,
+      cost_tier: tool.cost_tier ?? null,
     });
   }
 
   const insertTs = conn.prepare(
-    `INSERT OR IGNORE INTO toolsets (id, include_json, exclude_json)
-     VALUES (@id, @include_json, @exclude_json)`,
+    `INSERT OR IGNORE INTO toolsets (id, name, description, tool_ids_json)
+     VALUES (@id, @name, @description, @tool_ids_json)`,
   );
   for (const ts of SEED_TOOLSETS) {
     insertTs.run({
       id: ts.id,
-      include_json: JSON.stringify(ts.include),
-      exclude_json: JSON.stringify(ts.exclude),
+      name: ts.name ?? ts.id,
+      description: ts.description ?? null,
+      tool_ids_json: JSON.stringify(ts.tool_ids),
     });
   }
+
+  seedConsumers(conn);
 
   const insertSetting = conn.prepare(
     `INSERT OR IGNORE INTO settings (key, value) VALUES (@key, @value)`,
   );
   insertSetting.run({ key: "config_version", value: "3" });
+}
+
+/** Seed only consumers (used by the legacy-schema migration). */
+export function seedConsumers(conn) {
+  const insertConsumer = conn.prepare(
+    `INSERT OR IGNORE INTO consumers (id, user, host, toolset_ids_json)
+     VALUES (@id, @user, @host, @toolset_ids_json)`,
+  );
+  for (const c of SEED_CONSUMERS) {
+    insertConsumer.run({
+      id: c.id,
+      user: c.user,
+      host: c.host,
+      toolset_ids_json: JSON.stringify(c.toolset_ids),
+    });
+  }
 }

@@ -49,7 +49,7 @@ export function neverRequestedExtensions(db) {
     for (const id of JSON.parse(ev.ext_ids_json || "[]")) requested.add(id);
   }
   return store
-    .listExtensions(db)
+    .listTools(db)
     .filter((e) => !requested.has(e.id))
     .map((e) => ({ id: e.id, name: e.name }));
 }

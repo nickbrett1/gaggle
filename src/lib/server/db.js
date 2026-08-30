@@ -50,6 +50,16 @@ function columnExists(conn, table, column) {
 }
 
 export function migrate(conn) {
+  // If a legacy `toolsets` table exists with the old shape (include/exclude),
+  // rename it out of the way first so the CREATE TABLE below produces the new
+  // columns; the migration step then copies its data across.
+  if (
+    tableExists(conn, "toolsets") &&
+    !columnExists(conn, "toolsets", "tool_ids_json")
+  ) {
+    conn.exec("ALTER TABLE toolsets RENAME TO toolsets_legacy");
+  }
+
   conn.exec(`
     CREATE TABLE IF NOT EXISTS tools (
       id          TEXT PRIMARY KEY,
@@ -118,12 +128,11 @@ function migrateLegacy(conn) {
       .run();
   }
 
-  // 2. Legacy `toolsets` (include_json) -> new `toolsets` (tool_ids_json).
-  if (
-    tableExists(conn, "toolsets") &&
-    !columnExists(conn, "toolsets", "tool_ids_json")
-  ) {
-    const rows = conn.prepare("SELECT id, include_json FROM toolsets").all();
+  // 2. Legacy `toolsets_legacy` (include_json) -> new `toolsets` (tool_ids_json).
+  if (tableExists(conn, "toolsets_legacy")) {
+    const rows = conn
+      .prepare("SELECT id, include_json FROM toolsets_legacy")
+      .all();
     const insert = conn.prepare(
       `INSERT OR IGNORE INTO toolsets (id, name, description, tool_ids_json)
        VALUES (?, ?, NULL, ?)`,
@@ -137,6 +146,8 @@ function migrateLegacy(conn) {
       }
       insert.run(r.id, r.id, JSON.stringify(ids));
     }
+    // The legacy table has been fully migrated; drop it.
+    conn.exec("DROP TABLE toolsets_legacy");
   }
 
   // 3. Seed known consumers if none exist yet.

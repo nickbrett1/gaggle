@@ -35,6 +35,12 @@ export function toolFromForm(form) {
     }
   }
 
+  if (!id) return { error: "id is required" };
+  if (!["mcp", "builtin"].includes(kind))
+    return { error: "kind must be mcp or builtin" };
+  if (!["stdio", "streamable-http"].includes(transport))
+    return { error: "transport must be stdio or streamable-http" };
+
   const tool = {
     id,
     name: name || id,
@@ -64,12 +70,6 @@ export function toolFromForm(form) {
     if (!uri) return { error: "url is required for streamable-http tools" };
     tool.config.uri = uri;
   }
-
-  if (!id) return { error: "id is required" };
-  if (!["mcp", "builtin"].includes(kind))
-    return { error: "kind must be mcp or builtin" };
-  if (!["stdio", "streamable-http"].includes(transport))
-    return { error: "transport must be stdio or streamable-http" };
 
   return { tool };
 }

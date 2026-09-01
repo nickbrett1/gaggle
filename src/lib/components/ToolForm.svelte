@@ -6,6 +6,7 @@
 		showId = false,
 		form,
 		submitLabel = "Save",
+		toolset = "",
 	} = $props();
 
 	const cfg = initial.config ?? {};
@@ -27,6 +28,9 @@
 
 <div class="card" style="max-width:640px">
 	<form method="POST" action={action}>
+		{#if toolset}
+			<input type="hidden" name="toolset" value={toolset} />
+		{/if}
 		{#if showId}
 			<label for="id">ID (lowercase, unique)</label>
 			<input id="id" name="id" value={form?.id ?? initial.id ?? ""} placeholder="e.g. mydb" required />
@@ -84,7 +88,7 @@
 
 		<div class="mt-1">
 			<button class="primary" type="submit">{submitLabel}</button>
-			<a class="btn" href="/tools">Cancel</a>
+			<a class="btn" href={toolset ? `/toolsets/${toolset}` : "/"}>Cancel</a>
 		</div>
 	</form>
 </div>

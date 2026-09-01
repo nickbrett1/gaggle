@@ -1,14 +1,13 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { getDb } from "$lib/server/db.js";
 import * as store from "$lib/server/store.js";
-import { enrichConsumer } from "$lib/server/present.js";
 
 export function load({ url }) {
   const db = getDb();
-  const consumers = store.listConsumers(db).map((c) => enrichConsumer(db, c));
-  const toolsets = store.listToolsets(db);
-  const preselect = url.searchParams.get("toolset") ?? null;
-  return { consumers, toolsets, preselect };
+  return {
+    toolsets: store.listToolsets(db),
+    toolset: url.searchParams.get("toolset"),
+  };
 }
 
 export const actions = {
@@ -16,9 +15,12 @@ export const actions = {
     const form = await request.formData();
     const user = String(form.get("user") || "").trim();
     const host = String(form.get("host") || "").trim();
-    const toolset_ids = form.getAll("toolset_ids").map(String);
+    const toolset = String(form.get("toolset") || "").trim();
+    let toolset_ids = form.getAll("toolset_ids").map(String);
+    if (toolset && !toolset_ids.includes(toolset)) toolset_ids.push(toolset);
+
     if (!user || !host)
-      return fail(400, { error: "both host and user are required" });
+      return fail(400, { error: "both host and user are required", toolset });
 
     const id = `${user}@${host}`;
     const db = getDb();
@@ -27,15 +29,13 @@ export const actions = {
         error: `consumer "${id}" already exists`,
         user,
         host,
+        toolset,
         toolset_ids,
       });
     store.upsertConsumer(db, { id, user, host, toolset_ids });
-    throw redirect(303, `/consumers/${encodeURIComponent(id)}`);
-  },
 
-  delete: async ({ request }) => {
-    const form = await request.formData();
-    store.deleteConsumer(getDb(), String(form.get("id") || ""));
-    throw redirect(303, "/consumers");
+    if (toolset && store.getToolset(db, toolset))
+      throw redirect(303, `/toolsets/${encodeURIComponent(toolset)}`);
+    throw redirect(303, `/consumers/${encodeURIComponent(id)}`);
   },
 };

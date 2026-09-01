@@ -2,18 +2,17 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import Landing from "../src/routes/+page.svelte";
 
-const manyTools = ["a", "b", "c", "d", "e", "f"];
-
 const data = {
   toolsets: [
     {
       id: "media",
       name: "Media",
       description: "desc",
-      tool_ids: manyTools,
-      tool_names: manyTools,
+      tool_ids: ["igdb", "jelu", "memos", "catalog"],
+      tool_names: ["IGDB", "Jelu", "Memos", "Catalog"],
       consumers: ["nick@nas"],
       consumer_count: 1,
+      uses_30d: 5,
     },
     {
       id: "empty",
@@ -23,6 +22,7 @@ const data = {
       tool_names: [],
       consumers: [],
       consumer_count: 0,
+      uses_30d: 0,
     },
   ],
   consumers: [
@@ -32,37 +32,34 @@ const data = {
       host: "nas",
       toolset_ids: ["media"],
       toolset_names: ["Media"],
-      tool_ids: manyTools,
-      flattened_tool_count: 6,
+      tool_ids: ["igdb", "jelu", "memos", "catalog"],
+      flattened_tool_count: 4,
     },
   ],
-  tool_count: 8,
-  event_count: 3,
+  tools: [
+    {
+      id: "igdb",
+      name: "IGDB",
+      kind: "mcp",
+      used_in_toolsets: ["media"],
+    },
+  ],
 };
 
 describe("landing dashboard", () => {
-  it("renders the two columns and counts", () => {
+  it("renders the gaggle heading and the three tabs", () => {
     render(Landing, { props: { data } });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
       "gaggle",
     );
-    expect(screen.getByText("Toolsets")).toBeTruthy();
-    expect(screen.getByText("Consumers")).toBeTruthy();
-    expect(screen.getAllByText(/6 tools/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("tab").length).toBe(3);
   });
 
-  it("truncates long chip lists with a +N indicator", () => {
+  it("shows the toolsets table with tool/consumer/use counts", () => {
     render(Landing, { props: { data } });
-    expect(screen.getByText("+2")).toBeTruthy();
-  });
-
-  it("renders expandable toolset and consumer rows", () => {
-    const { container } = render(Landing, { props: { data } });
-    expect(container.querySelectorAll("details").length).toBe(3); // 2 toolsets + 1 consumer
-  });
-
-  it("shows an empty toolset as zero tools", () => {
-    render(Landing, { props: { data } });
-    expect(screen.getByText("0 tools")).toBeTruthy();
+    // default tab shows the toolset table, including the 30-day use count
+    expect(screen.getByText("Media")).toBeTruthy();
+    expect(screen.getAllByText("Toolsets").length).toBeGreaterThan(0);
+    expect(screen.getByText("5")).toBeTruthy();
   });
 });

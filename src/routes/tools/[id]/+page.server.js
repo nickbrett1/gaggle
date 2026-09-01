@@ -24,7 +24,7 @@ export const actions = {
     const { tool, error } = toolFromForm(form);
     if (error) return fail(400, { error });
     store.upsertTool(db, tool);
-    throw redirect(303, "/tools");
+    throw redirect(303, "/");
   },
 
   delete: async ({ request, params }) => {
@@ -42,6 +42,6 @@ export const actions = {
       });
 
     store.deleteTool(db, params.id);
-    throw redirect(303, "/tools");
+    throw redirect(303, "/");
   },
 };

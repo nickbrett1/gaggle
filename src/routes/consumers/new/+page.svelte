@@ -1,8 +1,6 @@
 <script>
 	let { data, form } = $props();
-	let selected = $state(
-		data.preselect ? [data.preselect] : (form?.toolset_ids ?? [])
-	);
+	let selected = $state(form?.toolset_ids ?? (data.toolset ? [data.toolset] : []));
 	function toggle(id) {
 		if (selected.includes(id)) selected = selected.filter((x) => x !== id);
 		else selected = [...selected, id];
@@ -10,17 +8,27 @@
 </script>
 
 <div class="spread">
-	<h2>Consumers</h2>
-	<p class="muted">Assign toolsets to a host+user pair (op #2).</p>
+	<h2>New consumer</h2>
+	{#if data.toolset}
+		<a class="btn" href="/toolsets/{data.toolset}">Back to toolset</a>
+	{:else}
+		<a class="btn" href="/">Back</a>
+	{/if}
 </div>
 
 {#if form?.error}
-	<div class="card" style="border-color:var(--danger);color:var(--danger)">{form.error}</div>
+	<div class="card err">{form.error}</div>
+{/if}
+
+{#if data.toolset}
+	<p class="muted small">This consumer will be assigned toolset <code>{data.toolset}</code>.</p>
 {/if}
 
 <div class="card" style="max-width:560px">
-	<h3>+ New consumer</h3>
 	<form method="POST" action="?/create">
+		{#if data.toolset}
+			<input type="hidden" name="toolset" value={data.toolset} />
+		{/if}
 		<div class="row" style="align-items:flex-start">
 			<div style="flex:1">
 				<label for="user">User</label>
@@ -55,49 +63,9 @@
 
 		<div class="mt-1">
 			<button class="primary" type="submit">Create consumer</button>
+			<a class="btn" href={data.toolset ? `/toolsets/${data.toolset}` : "/"}>Cancel</a>
 		</div>
 	</form>
-</div>
-
-<div class="card">
-	<table>
-		<thead>
-			<tr>
-				<th>Consumer</th>
-				<th>Toolsets</th>
-				<th>Tools</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each data.consumers as c}
-				<tr>
-					<td><a href="/consumers/{c.id}"><code>{c.id}</code></a></td>
-					<td>
-						{#each c.toolset_ids as id}
-							<span class="badge">{id}</span>
-						{/each}
-						{#if c.toolset_ids.length === 0}
-							<span class="muted small">(none)</span>
-						{/if}
-					</td>
-					<td><span class="badge">{c.flattened_tool_count}</span></td>
-					<td>
-						<div class="row">
-							<a class="btn" href="/consumers/{c.id}">Edit assignments</a>
-							<form method="POST" action="?/delete">
-								<input type="hidden" name="id" value={c.id} />
-								<button class="danger" type="submit">Delete</button>
-							</form>
-						</div>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
-	{#if data.consumers.length === 0}
-		<p class="muted">No consumers yet.</p>
-	{/if}
 </div>
 
 <style>
@@ -110,12 +78,24 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
-		padding: 0.25rem 0.5rem;
+		padding: 0.4rem 0.6rem;
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: 8px;
 		margin: 0;
+		min-height: 40px;
 	}
 	.opt input {
 		width: auto;
+		height: 18px;
+		width: 18px;
+	}
+	.err {
+		border-color: var(--danger);
+		color: var(--danger);
+	}
+	@media (max-width: 600px) {
+		.row > div {
+			min-width: 100%;
+		}
 	}
 </style>

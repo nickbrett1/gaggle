@@ -1,10 +1,16 @@
 <script>
-	let { data } = $props();
+	let { data, form } = $props();
 
-	const MAX_CHIPS = 4;
-	function chips(list, max = MAX_CHIPS) {
-		if (list.length <= max) return list;
-		return [...list.slice(0, max), `+${list.length - max}`];
+	const tabs = [
+		{ id: "toolsets", label: "Toolsets", count: () => data.toolsets.length },
+		{ id: "tools", label: "Tools", count: () => data.tools.length },
+		{ id: "consumers", label: "Consumers", count: () => data.consumers.length },
+	];
+
+	let tab = $state(form?.tab ?? "toolsets");
+
+	function go(url) {
+		window.location.href = url;
 	}
 </script>
 
@@ -12,177 +18,261 @@
 	<title>gaggle console</title>
 </svelte:head>
 
-<div class="spread">
+<div class="spread head">
 	<div>
 		<h1>gaggle 🪿</h1>
-		<p class="muted">
-			The two questions at a glance: <em>what's in each toolset and who gets
-			it</em>, and <em>what each consumer resolves to</em>.
-		</p>
-	</div>
-	<div class="row">
-		<a class="btn primary" href="/tools">+ New tool</a>
-		<a class="btn primary" href="/toolsets">+ New toolset</a>
-		<a class="btn primary" href="/consumers">+ New consumer</a>
+		<p class="muted small">Configure toolsets, the tools inside them, and who consumes them.</p>
 	</div>
 </div>
 
-<div class="grid">
-	<!-- Left: toolset-oriented -->
-	<div class="card">
-		<div class="spread">
-			<h2>Toolsets</h2>
-			<span class="muted small">{data.toolsets.length}</span>
-		</div>
+<div class="tabs" role="tablist">
+	{#each tabs as t}
+		<button
+			class="tab"
+			class:active={tab === t.id}
+			onclick={() => (tab = t.id)}
+			role="tab"
+			aria-selected={tab === t.id}
+		>
+			{t.label}
+			<span class="count">{t.count()}</span>
+		</button>
+	{/each}
+</div>
 
-		{#each data.toolsets as ts}
-			<details class="item">
-				<summary>
-					<div class="row">
-						<strong><code>{ts.id}</code></strong>
-						<span class="badge">{ts.tool_ids.length} tools</span>
-						<span class="badge">{ts.consumer_count} consumer{ts.consumer_count === 1 ? "" : "s"}</span>
-					</div>
-					<div class="row chips">
-						{#each chips(ts.tool_names) as name}
-							<span class="chip">{name}</span>
-						{/each}
-						{#each chips(ts.consumers) as c}
-							<span class="chip consumer">{c}</span>
-						{/each}
-					</div>
-					<div class="row">
-						<a class="btn small" href="/toolsets/{ts.id}">Edit tools</a>
-						<a class="btn small" href="/consumers?toolset={ts.id}">Assign consumers</a>
-					</div>
-				</summary>
-				<div class="detail">
-					{#if ts.description}
-						<p class="muted small">{ts.description}</p>
-					{/if}
-					<p class="small"><strong>Full membership:</strong>
-						{#each ts.tool_ids as id, i}
-							<span class="chip">{id}</span>
-						{/each}
-					</p>
-					<p class="small"><strong>Consumers:</strong>
-						{#if ts.consumers.length === 0}
-							<span class="muted">(none)</span>
-						{:else}
-							{#each ts.consumers as c}
-								<span class="chip consumer">{c}</span>
-							{/each}
-						{/if}
-					</p>
-				</div>
-			</details>
-		{/each}
+{#if form?.error}
+	<div class="card err">{form.error}</div>
+{/if}
+
+{#if tab === "toolsets"}
+	<div class="spread">
+		<h2>Toolsets</h2>
+		<a class="btn primary" href="/toolsets/new">+ New toolset</a>
+	</div>
+
+	<div class="card">
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>Toolset</th>
+						<th class="num">Tools</th>
+						<th class="num">Consumers</th>
+						<th class="num">Uses (30d)</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.toolsets as ts}
+						<tr
+							class="clickable"
+							tabindex="0"
+							onclick={() => go(`/toolsets/${encodeURIComponent(ts.id)}`)}
+							onkeydown={(e) => {
+								if (e.key === "Enter") go(`/toolsets/${encodeURIComponent(ts.id)}`);
+							}}
+						>
+							<td>
+								<div class="cell-title"><code>{ts.name}</code></div>
+								{#if ts.description}
+									<div class="muted small">{ts.description}</div>
+								{/if}
+							</td>
+							<td class="num">{ts.tool_ids.length}</td>
+							<td class="num">{ts.consumer_count}</td>
+							<td class="num">{ts.uses_30d}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 		{#if data.toolsets.length === 0}
-			<p class="muted">No toolsets yet.</p>
+			<p class="muted">No toolsets yet. Create your first one above.</p>
 		{/if}
 	</div>
+{:else if tab === "tools"}
+	<div class="spread">
+		<h2>Tools</h2>
+		<a class="btn primary" href="/tools/new">+ New tool</a>
+	</div>
 
-	<!-- Right: consumer-oriented -->
 	<div class="card">
-		<div class="spread">
-			<h2>Consumers</h2>
-			<span class="muted small">{data.consumers.length}</span>
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>Tool</th>
+						<th>Kind</th>
+						<th class="num">In toolsets</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.tools as tool}
+						<tr>
+							<td>
+								<a href="/tools/{tool.id}"><code>{tool.id}</code></a>
+								<div class="muted small">{tool.name}</div>
+							</td>
+							<td><span class="badge">{tool.kind}</span></td>
+							<td class="num">{tool.used_in_toolsets.length}</td>
+							<td class="actions">
+								<a class="btn" href="/tools/{tool.id}">Edit</a>
+								<form method="POST" action="?/deleteTool">
+									<input type="hidden" name="id" value={tool.id} />
+									<input type="hidden" name="tab" value="tools" />
+									<button
+										class="danger"
+										type="submit"
+										onclick={() => confirm(`Delete tool "${tool.id}"? This is permanent.`)}
+									>
+										Delete
+									</button>
+								</form>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		</div>
-
-		{#each data.consumers as c}
-			<details class="item">
-				<summary>
-					<div class="row">
-						<strong><code>{c.id}</code></strong>
-						<span class="badge">{c.flattened_tool_count} tools</span>
-					</div>
-					<div class="row chips">
-						{#each chips(c.toolset_names) as name}
-							<span class="chip">{name}</span>
-						{/each}
-					</div>
-					<div class="row">
-						<a class="btn small" href="/consumers/{c.id}">Edit assignments</a>
-					</div>
-				</summary>
-				<div class="detail">
-					<p class="small"><strong>Resolves to (flat, ordered):</strong>
-						{#if c.tool_ids.length === 0}
-							<span class="muted">(nothing)</span>
-						{:else}
-							{#each c.tool_ids as id}
-								<span class="chip">{id}</span>
-							{/each}
-						{/if}
-					</p>
-				</div>
-			</details>
-		{/each}
-		{#if data.consumers.length === 0}
-			<p class="muted">No consumers yet.</p>
+		{#if data.tools.length === 0}
+			<p class="muted">No tools yet. Add one above.</p>
 		{/if}
 	</div>
-</div>
+{:else}
+	<div class="spread">
+		<h2>Consumers</h2>
+		<a class="btn primary" href="/consumers/new">+ New consumer</a>
+	</div>
 
-<div class="card">
-	<h3>API</h3>
-	<pre class="muted small"># Resolve a consumer (literal union of its assigned toolsets)
-curl "http://nas:8780/resolve?user=nick&host=nas"
-
-# Quick toolset selector (kept for the goose wrapper: `goose media`, `--full`)
-curl "http://nas:8780/resolve?user=nick&host=nas&task=media"
-
-# Ready-to-write goose config (what the wrapper writes)
-curl "http://nas:8780/config?user=nick&host=nas&task=dev"</pre>
-	<p class="muted small">
-		{data.tool_count} tools · {data.event_count} resolve events
-	</p>
-</div>
+	<div class="card">
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>Consumer</th>
+						<th>Toolsets</th>
+						<th class="num">Tools</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.consumers as c}
+						<tr>
+							<td>
+								<a href="/consumers/{c.id}"><code>{c.id}</code></a>
+							</td>
+							<td>
+								{#each c.toolset_ids as id}
+									<span class="badge">{id}</span>
+								{/each}
+								{#if c.toolset_ids.length === 0}
+									<span class="muted small">(none)</span>
+								{/if}
+							</td>
+							<td class="num">{c.flattened_tool_count}</td>
+							<td class="actions">
+								<a class="btn" href="/consumers/{c.id}">Edit</a>
+								<form method="POST" action="?/deleteConsumer">
+									<input type="hidden" name="id" value={c.id} />
+									<input type="hidden" name="tab" value="consumers" />
+									<button
+										class="danger"
+										type="submit"
+										onclick={() => confirm(`Delete consumer "${c.id}"? This is permanent.`)}
+									>
+										Delete
+									</button>
+								</form>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+		{#if data.consumers.length === 0}
+			<p class="muted">No consumers yet. Add one above.</p>
+		{/if}
+	</div>
+{/if}
 
 <style>
-	.grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-		align-items: start;
+	.head {
+		margin-bottom: 0.25rem;
 	}
-	@media (max-width: 860px) {
-		.grid {
-			grid-template-columns: 1fr;
-		}
+	.tabs {
+		display: flex;
+		gap: 0.5rem;
+		margin: 1rem 0;
+		flex-wrap: wrap;
 	}
-	.item {
-		border: 1px solid var(--border);
+	.tab {
+		flex: 1 1 auto;
+		text-align: center;
+		font-weight: 600;
+		padding: 0.6rem 1rem;
 		border-radius: 8px;
-		padding: 0.6rem 0.75rem;
-		margin-bottom: 0.6rem;
-	}
-	summary {
-		cursor: pointer;
-		list-style: none;
-	}
-	summary::-webkit-details-marker {
-		display: none;
-	}
-	.chips {
-		margin: 0.35rem 0;
-	}
-	.chip {
-		display: inline-block;
-		padding: 0.05rem 0.5rem;
-		border-radius: 999px;
-		background: var(--panel-2);
 		border: 1px solid var(--border);
-		font-size: 0.75rem;
+		background: var(--panel);
 		color: var(--muted);
-		margin-right: 0.25rem;
+		cursor: pointer;
+		min-height: 44px;
 	}
-	.chip.consumer {
-		color: var(--accent);
+	.tab.active {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: #0b1220;
 	}
-	.detail {
-		margin-top: 0.5rem;
-		border-top: 1px dashed var(--border);
-		padding-top: 0.5rem;
+	.count {
+		display: inline-block;
+		margin-left: 0.35rem;
+		font-size: 0.75rem;
+		opacity: 0.7;
+	}
+	.table-wrap {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+	table {
+		min-width: 520px;
+	}
+	.num {
+		text-align: right;
+		white-space: nowrap;
+	}
+	th.num {
+		text-align: right;
+	}
+	tr.clickable {
+		cursor: pointer;
+	}
+	tr.clickable:hover td {
+		background: var(--panel-2);
+	}
+	.cell-title {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.actions {
+		text-align: right;
+		white-space: nowrap;
+	}
+	.actions form {
+		display: inline-block;
+		margin: 0;
+	}
+	.err {
+		border-color: var(--danger);
+		color: var(--danger);
+	}
+	/* Mobile: tighten the table and keep buttons tappable */
+	@media (max-width: 600px) {
+		th,
+		td {
+			padding: 0.55rem 0.5rem;
+		}
+		.tab {
+			min-width: 0;
+		}
 	}
 </style>

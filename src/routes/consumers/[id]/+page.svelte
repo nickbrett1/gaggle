@@ -27,7 +27,7 @@
 
 <div class="spread">
 	<h2>Consumer: <code>{consumer.id}</code></h2>
-	<a class="btn" href="/consumers">Back</a>
+	<a class="btn" href="/">Back</a>
 </div>
 
 {#if form?.error}
@@ -60,7 +60,7 @@
 
 			<div class="mt-1">
 				<button class="primary" type="submit">Save assignments</button>
-				<a class="btn" href="/consumers">Cancel</a>
+				<a class="btn" href="/">Cancel</a>
 			</div>
 		</form>
 	</div>

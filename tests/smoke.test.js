@@ -22,8 +22,7 @@ describe("generated app smoke test", () => {
         data: {
           toolsets: [],
           consumers: [],
-          tool_count: 0,
-          event_count: 0,
+          tools: [],
         },
       },
     });

@@ -7,7 +7,11 @@
 		{ id: "consumers", label: "Consumers", count: () => data.consumers.length },
 	];
 
-	let tab = $state(form?.tab ?? "toolsets");
+	// capture the initial tab from the form once (not reactive)
+	function initialTab() {
+		return form?.tab ?? "toolsets";
+	}
+	let tab = $state(initialTab());
 
 	function go(url) {
 		window.location.href = url;

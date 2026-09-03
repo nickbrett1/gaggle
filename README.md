@@ -20,12 +20,14 @@ no precedence layering**.
 
 - **Tool** — a registered MCP or builtin tool, with its full config
   (`kind`, `transport`, and `url` or `command/args/env`).
-- **Toolset** — a named, **ordered** list of tools.
+- **Toolset** — a named list of tools (membership is stored and served in
+  alphabetical order — no manual ordering).
 - **Consumer** — a `host + user` pair (e.g. `nick@nas`) that is **directly
   assigned one or more toolsets**.
 
 A consumer's resolved set is the **literal union of its assigned toolsets, in
-toolset order** (deduplicated, order preserved). `nick@macstudio` and
+toolset assignment order** (deduplicated; each toolset's own tools are served
+alphabetically). `nick@macstudio` and
 `nick@nas` are completely independent. `task` is retained only as a legacy
 wrapper convenience: `task` naming a toolset selects that toolset directly
 (`goose media`, `goose dev`), and `task=all` is the `goose --full` escape hatch
@@ -43,7 +45,7 @@ that returns every known tool.
 | `/toolsets`              | Console — manage tools within a toolset (op #1)      |
 | `/consumers`             | Console — assign toolsets to a consumer (op #2)      |
 | `/tools`                 | Console — tool catalog (op #3)                       |
-| `/log`                   | Console — history log (append-only, read-only)       |
+| `/log`                   | Console — Activity (append-only, read-only)          |
 
 ### The two landing-page questions
 
@@ -74,10 +76,9 @@ Every `/resolve` and `/config` call is logged to SQLite (append-only history).
    upfront; a tool must exist in the catalog before it can be added to a
    toolset. Deleting a tool warns about toolsets that still include it.
 
-**UX rules:** no precedence language anywhere; live previews when editing;
-reverse lookups everywhere (every tool shows where it's used, every toolset
-shows who consumes it); dangerous deletes warn; order shown = order served by
-`/resolve`.
+**UX rules:** no precedence language anywhere; reverse lookups everywhere
+(every tool shows where it's used, every toolset shows who consumes it);
+dangerous deletes warn; tools are served alphabetically.
 
 ### Bundled Goose machinery
 

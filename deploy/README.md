@@ -125,3 +125,36 @@ generated Dockerfile, compose file and Homepage widget stay consistent:
 
 Regenerate with `overwrite: true` to apply these to an existing repo — existing
 app code is preserved; only generated infra files are updated.
+
+## 9. HTTPS (removing the browser "Not secure" warning)
+
+The console is served over plain HTTP on the Tailscale-only LAN, so browsers
+show the "not secure" warning on form pages. That warning only goes away when
+the site is served over **TLS**. Because this is a Tailscale-only host, the
+easiest path is **Tailscale Serve**, which issues a valid Let's Encrypt
+certificate automatically and needs no extra DNS or reverse proxy:
+
+```bash
+# On the NAS, behind the gaggle container (adapter-node listens on 3000,
+# published as 127.0.0.1:8780):
+sudo tailscale serve --bg https:443 / http://127.0.0.1:8780
+# then open: https://<machine-name>.<tailnet>.ts.net
+```
+
+Alternative: put the app behind an existing reverse proxy (e.g. Synology
+Reverse Proxy or Caddy) that terminates TLS for your domain. With
+`@sveltejs/adapter-node`, tell the app its external URL so redirects/links are
+correct by passing these env vars to the container:
+
+```yaml
+ORIGIN: https://gaggle.example.com
+PROTOCOL_HEADER: x-forwarded-proto
+HOST_HEADER: x-forwarded-host
+```
+
+> **CSRF:** behind a proxy, the browser's `Origin` (`https://…`) no longer
+> matches the `Host` the app sees internally (`nas:8780`). That tripped
+> SvelteKit's built-in origin check ("Cross-site POST form submissions are
+> forbidden"). Since gaggle is a no-auth app on a trusted Tailscale-only
+> network, `svelte.config.js` sets `kit.csrf.trustedOrigins = ['*']` to disable
+> that check. Do not re-enable it unless you add authentication.

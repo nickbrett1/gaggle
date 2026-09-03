@@ -10,9 +10,9 @@
 <div class="spread">
 	<h2>New consumer</h2>
 	{#if data.toolset}
-		<a class="btn" href="/toolsets/{data.toolset}">Back to toolset</a>
+		<a class="btn" href="/toolsets/{data.toolset}?tab=toolsets">Back to toolset</a>
 	{:else}
-		<a class="btn" href="/">Back</a>
+		<a class="btn" href="/?tab=consumers">Back</a>
 	{/if}
 </div>
 
@@ -63,7 +63,7 @@
 
 		<div class="mt-1">
 			<button class="primary" type="submit">Create consumer</button>
-			<a class="btn" href={data.toolset ? `/toolsets/${data.toolset}` : "/"}>Cancel</a>
+			<a class="btn" href={data.toolset ? `/toolsets/${data.toolset}` : "/?tab=consumers"}>Cancel</a>
 		</div>
 	</form>
 </div>

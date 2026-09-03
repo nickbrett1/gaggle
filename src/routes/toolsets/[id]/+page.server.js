@@ -19,13 +19,6 @@ export function load({ params }) {
   return { toolset, catalog, consumers };
 }
 
-function parseCsv(str) {
-  return (str || "")
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 export const actions = {
   save: async ({ request, params }) => {
     const db = getDb();
@@ -35,19 +28,13 @@ export const actions = {
     const form = await request.formData();
     const name = String(form.get("name") || "").trim() || params.id;
     const description = String(form.get("description") || "").trim();
-    const memberIds = parseCsv(String(form.get("members") || ""));
-    const addIds = form.getAll("add").map(String);
-
-    const final = [...memberIds];
-    for (const id of addIds) {
-      if (!final.includes(id)) final.push(id);
-    }
-
+    // Which tools are included: one checkbox per catalog tool.
+    const memberIds = form.getAll("member").map(String);
     store.upsertToolset(db, {
       id: params.id,
       name,
       description,
-      tool_ids: final,
+      tool_ids: memberIds,
     });
 
     // Sync consumer assignment: the checked consumers include this toolset.
@@ -66,6 +53,6 @@ export const actions = {
 
   delete: async ({ params }) => {
     store.deleteToolset(getDb(), params.id);
-    throw redirect(303, "/");
+    throw redirect(303, "/?tab=toolsets");
   },
 };

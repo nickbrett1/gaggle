@@ -4,7 +4,7 @@
 
 <div class="spread">
 	<h2>New toolset</h2>
-	<a class="btn" href="/">Back</a>
+	<a class="btn" href="/?tab=toolsets">Back</a>
 </div>
 
 {#if form?.error}
@@ -24,7 +24,7 @@
 
 		<div class="mt-1">
 			<button class="primary" type="submit">Create toolset</button>
-			<a class="btn" href="/">Cancel</a>
+			<a class="btn" href="/?tab=toolsets">Cancel</a>
 		</div>
 	</form>
 </div>

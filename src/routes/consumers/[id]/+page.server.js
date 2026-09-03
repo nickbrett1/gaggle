@@ -26,11 +26,11 @@ export const actions = {
       host: existing.host,
       toolset_ids,
     });
-    throw redirect(303, "/");
+    throw redirect(303, "/?tab=consumers");
   },
 
   delete: async ({ params }) => {
     store.deleteConsumer(getDb(), params.id);
-    throw redirect(303, "/");
+    throw redirect(303, "/?tab=consumers");
   },
 };

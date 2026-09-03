@@ -29,7 +29,7 @@ function usesInLast30Days(db, toolIds) {
   return n;
 }
 
-export function load() {
+export function load({ url }) {
   const db = getDb();
   const toolsets = store.listToolsets(db).map((ts) => {
     const e = enrichToolset(db, ts);
@@ -37,7 +37,9 @@ export function load() {
   });
   const consumers = store.listConsumers(db).map((c) => enrichConsumer(db, c));
   const tools = enrichTools(db);
-  return { toolsets, consumers, tools };
+  // Which tab to open initially — carried in the URL so "Back" from a detail
+  // page (and the browser back button) returns to the same section.
+  return { toolsets, consumers, tools, tab: url.searchParams.get("tab") };
 }
 
 export const actions = {

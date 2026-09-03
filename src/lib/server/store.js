@@ -102,6 +102,9 @@ export function getToolset(db, id) {
 }
 
 export function upsertToolset(db, ts) {
+  // Tools are served in alphabetical order — there is no manual ordering, so
+  // we normalize membership to sorted-by-id on every write.
+  const tool_ids = [...(ts.tool_ids ?? [])].sort();
   db.prepare(
     `INSERT INTO toolsets (id, name, description, tool_ids_json)
      VALUES (@id, @name, @description, @tool_ids_json)
@@ -113,7 +116,7 @@ export function upsertToolset(db, ts) {
     id: ts.id,
     name: ts.name ?? ts.id,
     description: ts.description ?? null,
-    tool_ids_json: JSON.stringify(ts.tool_ids ?? []),
+    tool_ids_json: JSON.stringify(tool_ids),
   });
 }
 

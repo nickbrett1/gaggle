@@ -16,7 +16,7 @@ function route(url) {
 }
 
 describe("generated app smoke test", () => {
-  it("renders the landing page with gaggle heading", () => {
+  it("renders the landing page tabs", () => {
     render(Page, {
       props: {
         data: {
@@ -26,8 +26,9 @@ describe("generated app smoke test", () => {
         },
       },
     });
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
-      "gaggle",
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toContain(
+      "Toolsets",
     );
   });
 

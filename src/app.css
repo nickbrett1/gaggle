@@ -146,6 +146,7 @@ button.danger,
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  margin-bottom: 0.9rem;
 }
 .muted {
   color: var(--muted);

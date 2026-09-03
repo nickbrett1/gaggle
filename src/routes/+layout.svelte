@@ -1,6 +1,12 @@
 <script>
 	import "../app.css";
+	import { page } from "$app/state";
 	let { children } = $props();
+
+	// Show "Back" instead of the "Activity" link while we're on the Activity page.
+	const onActivity = $derived(
+		page.url.pathname === "/log" || page.url.pathname.startsWith("/log/")
+	);
 </script>
 
 <svelte:head>
@@ -11,7 +17,11 @@
 	<nav>
 		<span class="brand"><a href="/">gaggle 🪿</a></span>
 		<span class="spacer"></span>
-		<a class="btn small" href="/log">Log</a>
+		{#if onActivity}
+			<a class="btn small" href="/">Back</a>
+		{:else}
+			<a class="btn small" href="/log">Activity</a>
+		{/if}
 	</nav>
 	<main>
 		{@render children()}

@@ -47,12 +47,12 @@ const data = {
 };
 
 describe("landing dashboard", () => {
-  it("renders the gaggle heading and the three tabs", () => {
+  it("renders the three tabs and defaults to the toolsets view", () => {
     render(Landing, { props: { data } });
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
-      "gaggle",
-    );
     expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toContain(
+      "Toolsets",
+    );
   });
 
   it("shows the toolsets table with tool/consumer/use counts", () => {

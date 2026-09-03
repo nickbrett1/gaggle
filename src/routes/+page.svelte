@@ -7,34 +7,35 @@
 		{ id: "consumers", label: "Consumers", count: () => data.consumers.length },
 	];
 
-	// capture the initial tab from the form once (not reactive)
+	// Initial tab: prefer the URL's ?tab= (set when you left for a detail page),
+	// then the value echoed back from a form action, else default to Toolsets.
 	function initialTab() {
-		return form?.tab ?? "toolsets";
+		const t = data.tab && tabs.some((x) => x.id === data.tab) ? data.tab : null;
+		const f = form?.tab && tabs.some((x) => x.id === form.tab) ? form.tab : null;
+		return t ?? f ?? "toolsets";
 	}
 	let tab = $state(initialTab());
+
+	function selectTab(id) {
+		tab = id;
+		// Reflect the active tab in the URL so it survives refresh and the
+		// browser back button returns to the same section.
+		const u = new URL(window.location.href);
+		u.searchParams.set("tab", id);
+		window.history.replaceState({}, "", u);
+	}
 
 	function go(url) {
 		window.location.href = url;
 	}
 </script>
 
-<svelte:head>
-	<title>gaggle console</title>
-</svelte:head>
-
-<div class="spread head">
-	<div>
-		<h1>gaggle 🪿</h1>
-		<p class="muted small">Configure toolsets, the tools inside them, and who consumes them.</p>
-	</div>
-</div>
-
 <div class="tabs" role="tablist">
 	{#each tabs as t}
 		<button
 			class="tab"
 			class:active={tab === t.id}
-			onclick={() => (tab = t.id)}
+			onclick={() => selectTab(t.id)}
 			role="tab"
 			aria-selected={tab === t.id}
 		>
@@ -60,8 +61,8 @@
 				<thead>
 					<tr>
 						<th>Toolset</th>
-						<th class="num">Tools</th>
-						<th class="num">Consumers</th>
+						<th class="num col-tools">Tools</th>
+						<th class="num col-consumers">Consumers</th>
 						<th class="num">Uses (30d)</th>
 					</tr>
 				</thead>
@@ -70,9 +71,10 @@
 						<tr
 							class="clickable"
 							tabindex="0"
-							onclick={() => go(`/toolsets/${encodeURIComponent(ts.id)}`)}
+							onclick={() => go(`/toolsets/${encodeURIComponent(ts.id)}?tab=toolsets`)}
 							onkeydown={(e) => {
-								if (e.key === "Enter") go(`/toolsets/${encodeURIComponent(ts.id)}`);
+								if (e.key === "Enter")
+									go(`/toolsets/${encodeURIComponent(ts.id)}?tab=toolsets`);
 							}}
 						>
 							<td>
@@ -81,8 +83,8 @@
 									<div class="muted small">{ts.description}</div>
 								{/if}
 							</td>
-							<td class="num">{ts.tool_ids.length}</td>
-							<td class="num">{ts.consumer_count}</td>
+							<td class="num col-tools">{ts.tool_ids.length}</td>
+							<td class="num col-consumers">{ts.consumer_count}</td>
 							<td class="num">{ts.uses_30d}</td>
 						</tr>
 					{/each}
@@ -106,7 +108,7 @@
 					<tr>
 						<th>Tool</th>
 						<th>Kind</th>
-						<th class="num">In toolsets</th>
+						<th class="num col-used">In toolsets</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -118,7 +120,7 @@
 								<div class="muted small">{tool.name}</div>
 							</td>
 							<td><span class="badge">{tool.kind}</span></td>
-							<td class="num">{tool.used_in_toolsets.length}</td>
+							<td class="num col-used">{tool.used_in_toolsets.length}</td>
 							<td class="actions">
 								<a class="btn" href="/tools/{tool.id}">Edit</a>
 								<form method="POST" action="?/deleteTool">
@@ -155,7 +157,7 @@
 					<tr>
 						<th>Consumer</th>
 						<th>Toolsets</th>
-						<th class="num">Tools</th>
+						<th class="num col-ctools">Tools</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -173,7 +175,7 @@
 									<span class="muted small">(none)</span>
 								{/if}
 							</td>
-							<td class="num">{c.flattened_tool_count}</td>
+							<td class="num col-ctools">{c.flattened_tool_count}</td>
 							<td class="actions">
 								<a class="btn" href="/consumers/{c.id}">Edit</a>
 								<form method="POST" action="?/deleteConsumer">
@@ -200,9 +202,6 @@
 {/if}
 
 <style>
-	.head {
-		margin-bottom: 0.25rem;
-	}
 	.tabs {
 		display: flex;
 		gap: 0.5rem;
@@ -237,7 +236,7 @@
 		-webkit-overflow-scrolling: touch;
 	}
 	table {
-		min-width: 520px;
+		width: 100%;
 	}
 	.num {
 		text-align: right;
@@ -268,6 +267,20 @@
 	.err {
 		border-color: var(--danger);
 		color: var(--danger);
+	}
+	/* Drop low-priority columns on narrow screens instead of scrolling
+     horizontally. Priority: uses (30d) > tools > consumers. */
+	@media (max-width: 700px) {
+		.col-consumers,
+		.col-ctools {
+			display: none;
+		}
+	}
+	@media (max-width: 540px) {
+		.col-tools,
+		.col-used {
+			display: none;
+		}
 	}
 	/* Mobile: tighten the table and keep buttons tappable */
 	@media (max-width: 600px) {

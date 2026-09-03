@@ -5,10 +5,10 @@
 
 <div class="spread">
 	<h2>Edit tool: <code>{data.tool.id}</code></h2>
-	<a class="btn" href="/">Back</a>
+	<a class="btn" href="/?tab=tools">Back</a>
 </div>
 
-<ToolForm action="?/save" {form} initial={data.tool} submitLabel="Save tool" />
+<ToolForm action="?/save" {form} initial={data.tool} submitLabel="Save tool" cancelHref="/?tab=tools" />
 
 <div class="card">
 	<h3>Danger zone</h3>

@@ -7,6 +7,7 @@
 		form,
 		submitLabel = "Save",
 		toolset = "",
+		cancelHref = "/",
 	} = $props();
 
 	const cfg = initial.config ?? {};
@@ -88,7 +89,7 @@
 
 		<div class="mt-1">
 			<button class="primary" type="submit">{submitLabel}</button>
-			<a class="btn" href={toolset ? `/toolsets/${toolset}` : "/"}>Cancel</a>
+			<a class="btn" href={cancelHref}>Cancel</a>
 		</div>
 	</form>
 </div>

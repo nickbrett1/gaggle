@@ -36,21 +36,23 @@ describe("resolution engine (consumer model)", () => {
     ]);
   });
 
-  it("resolves a consumer with multiple toolsets as an ordered union", () => {
+  it("resolves a consumer to its single assigned toolset", () => {
     const db = freshDb();
     store.upsertConsumer(db, {
       id: "x@y",
       user: "x",
       host: "y",
-      toolset_ids: ["dev", "container"],
+      toolset_id: "container",
     });
     const res = resolve(db, { user: "x", host: "y" });
-    // dev = [github, memos]; container = [dozzle, memos] -> dedup memos.
-    expect(res.extensions.map((e) => e.id)).toEqual([
-      "github",
-      "memos",
-      "dozzle",
-    ]);
+    expect(res.extensions.map((e) => e.id)).toEqual(["dozzle", "memos"]);
+  });
+
+  it("falls back to the default toolset for a consumer with no assignment", () => {
+    const db = freshDb();
+    store.upsertConsumer(db, { id: "x@y", user: "x", host: "y" });
+    const res = resolve(db, { user: "x", host: "y" });
+    expect(res.extensions.map((e) => e.id)).toEqual(["memos"]);
   });
 
   it("falls back to the default toolset for an unknown consumer", () => {

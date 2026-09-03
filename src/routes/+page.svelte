@@ -180,7 +180,7 @@
 									title={c.uses_default
 										? "No toolset assigned — falls back to default"
 										: "Assigned toolset"}
-								>{c.toolset_id}</span>
+								>{c.effective_toolset_id}</span>
 							</td>
 							<td class="num col-ctools">{c.flattened_tool_count}</td>
 							<td class="actions">

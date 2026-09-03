@@ -3,7 +3,8 @@
  * expectations"). Two-entity model:
  *   Tool      — a registered MCP or builtin tool.
  *   Toolset   — a named, ordered list of tools.
- *   Consumer  — a `host + user` pair assigned an ordered list of toolsets.
+ *   Consumer  — a `host + user` pair assigned at most one toolset
+ *               (`toolset_id`); NULL falls back to the `default` toolset.
  */
 
 const TOOL_COLS =
@@ -130,46 +131,42 @@ export function deleteToolset(db, id) {
 
 export function listConsumers(db) {
   return db
-    .prepare(
-      "SELECT id, user, host, toolset_ids_json FROM consumers ORDER BY id",
-    )
+    .prepare("SELECT id, user, host, toolset_id FROM consumers ORDER BY id")
     .all()
     .map((r) => ({
       id: r.id,
       user: r.user,
       host: r.host,
-      toolset_ids: JSON.parse(r.toolset_ids_json || "[]"),
+      toolset_id: r.toolset_id,
     }));
 }
 
 export function getConsumer(db, id) {
   const r = db
-    .prepare(
-      "SELECT id, user, host, toolset_ids_json FROM consumers WHERE id = ?",
-    )
+    .prepare("SELECT id, user, host, toolset_id FROM consumers WHERE id = ?")
     .get(id);
   if (!r) return null;
   return {
     id: r.id,
     user: r.user,
     host: r.host,
-    toolset_ids: JSON.parse(r.toolset_ids_json || "[]"),
+    toolset_id: r.toolset_id,
   };
 }
 
 export function upsertConsumer(db, consumer) {
   db.prepare(
-    `INSERT INTO consumers (id, user, host, toolset_ids_json)
-     VALUES (@id, @user, @host, @toolset_ids_json)
+    `INSERT INTO consumers (id, user, host, toolset_id)
+     VALUES (@id, @user, @host, @toolset_id)
      ON CONFLICT(id) DO UPDATE SET
        user = excluded.user,
        host = excluded.host,
-       toolset_ids_json = excluded.toolset_ids_json`,
+       toolset_id = excluded.toolset_id`,
   ).run({
     id: consumer.id,
     user: consumer.user,
     host: consumer.host,
-    toolset_ids_json: JSON.stringify(consumer.toolset_ids ?? []),
+    toolset_id: consumer.toolset_id ?? null,
   });
 }
 

@@ -4,8 +4,8 @@
  * Model: two entities —
  *   Tool      — a registered MCP or builtin tool (full config, no secrets).
  *   Toolset   — a named, ordered list of tools.
- *   Consumer  — a `host + user` pair directly assigned an ordered list of
- *               toolsets. No inheritance, no fallback, no precedence layering.
+ *   Consumer  — a `host + user` pair assigned at most one toolset; with none
+ *               assigned they fall back to the `default` toolset.
  *
  * Tools carry a normalized config object:
  *   { transport: "streamable-http"|"stdio",
@@ -180,18 +180,13 @@ export const SEED_TOOLSETS = [
 ];
 
 /**
- * Seed consumers from the known host/user pairs. Each consumer is assigned
- * toolsets directly — there is no inheritance or fallback between them.
+ * Seed consumers from the known host/user pairs. Each consumer is assigned at
+ * most one toolset; omit `toolset_id` to have them fall back to `default`.
  */
 export const SEED_CONSUMERS = [
-  { id: "nick@nas", user: "nick", host: "nas", toolset_ids: ["media"] },
-  {
-    id: "nick@macstudio",
-    user: "nick",
-    host: "macstudio",
-    toolset_ids: ["dev"],
-  },
-  { id: "root@nas", user: "root", host: "nas", toolset_ids: ["container"] },
+  { id: "nick@nas", user: "nick", host: "nas", toolset_id: "media" },
+  { id: "nick@macstudio", user: "nick", host: "macstudio", toolset_id: "dev" },
+  { id: "root@nas", user: "root", host: "nas", toolset_id: "container" },
 ];
 
 export function seed(conn) {
@@ -237,15 +232,15 @@ export function seed(conn) {
 /** Seed only consumers (used by the legacy-schema migration). */
 export function seedConsumers(conn) {
   const insertConsumer = conn.prepare(
-    `INSERT OR IGNORE INTO consumers (id, user, host, toolset_ids_json)
-     VALUES (@id, @user, @host, @toolset_ids_json)`,
+    `INSERT OR IGNORE INTO consumers (id, user, host, toolset_id)
+     VALUES (@id, @user, @host, @toolset_id)`,
   );
   for (const c of SEED_CONSUMERS) {
     insertConsumer.run({
       id: c.id,
       user: c.user,
       host: c.host,
-      toolset_ids_json: JSON.stringify(c.toolset_ids),
+      toolset_id: c.toolset_id ?? null,
     });
   }
 }

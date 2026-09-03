@@ -18,7 +18,6 @@ export const actions = {
     const form = await request.formData();
     // Single toolset per consumer; "" / missing means fall back to default.
     const toolset = String(form.get("toolset") || "").trim();
-    const toolset_ids = toolset ? [toolset] : [];
     const db = getDb();
     const existing = store.getConsumer(db, params.id);
     if (!existing) throw error(404, "Consumer not found");
@@ -26,7 +25,7 @@ export const actions = {
       id: existing.id,
       user: existing.user,
       host: existing.host,
-      toolset_ids,
+      toolset_id: toolset || null,
     });
     throw redirect(303, "/?tab=consumers");
   },

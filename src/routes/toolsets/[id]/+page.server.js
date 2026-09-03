@@ -38,17 +38,17 @@ export const actions = {
       tool_ids: memberIds,
     });
 
-    // Sync consumer assignment. Each consumer has at most one toolset, so
-    // checking one here makes this its (sole) toolset; unchecking a consumer
-    // that had this toolset clears it (they fall back to `default`). Consumers
-    // on a different toolset are left untouched.
-    const assign = form.getAll("assign").map(String);
+    // Sync consumer assignment. Each consumer has a single `toolset_id`, so
+    // checking one here moves it to this toolset; unchecking a consumer that
+    // had this toolset clears it (they fall back to `default`). Consumers on a
+    // different toolset are left untouched.
+    const assign = new Set(form.getAll("assign").map(String));
     for (const c of store.listConsumers(db)) {
-      let ids = c.toolset_ids;
-      const has = ids.includes(params.id);
-      if (assign.includes(c.id) && !has) ids = [params.id];
-      else if (!assign.includes(c.id) && has) ids = [];
-      store.upsertConsumer(db, { ...c, toolset_ids: ids });
+      let next = c.toolset_id;
+      if (assign.has(c.id)) next = params.id;
+      else if (c.toolset_id === params.id) next = null;
+      if (next !== c.toolset_id)
+        store.upsertConsumer(db, { ...c, toolset_id: next });
     }
 
     throw redirect(303, `/toolsets/${encodeURIComponent(params.id)}`);

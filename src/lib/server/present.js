@@ -6,27 +6,20 @@
 
 import * as store from "./store.js";
 
-/** Flatten a list of toolsets (by id) into an ordered, deduped tool id list. */
-export function flattenToolsetIds(db, toolsetIds) {
-  const out = [];
-  for (const tsId of toolsetIds) {
-    const ts = store.getToolset(db, tsId);
-    if (!ts) continue;
-    for (const tid of ts.tool_ids) {
-      if (!out.includes(tid)) out.push(tid);
-    }
-  }
-  return out;
-}
-
 /** The effective toolset id for a consumer: their single assignment or `default`. */
 export function effectiveToolsetId(consumer) {
-  return consumer.toolset_ids[0] ?? "default";
+  return consumer.toolset_id ?? "default";
 }
 
-/** Flatten a consumer's toolsets into an ordered, deduped tool id list. */
+/** The ordered tool id list for one toolset (falling back to default when absent). */
+export function toolsForToolsetId(db, toolsetId) {
+  const ts = store.getToolset(db, toolsetId);
+  return ts ? ts.tool_ids : [];
+}
+
+/** The ordered tool ids a consumer resolves to (their one toolset or default). */
 export function flattenConsumerTools(db, consumer) {
-  return flattenToolsetIds(db, consumer.toolset_ids);
+  return toolsForToolsetId(db, effectiveToolsetId(consumer));
 }
 
 export function enrichToolset(db, ts) {
@@ -49,25 +42,25 @@ export function enrichToolset(db, ts) {
 }
 
 /**
- * A consumer is assigned at most one toolset. If they have none assigned they
- * implicitly fall back to the `default` toolset, so every consumer always has
- * exactly one *effective* toolset. `assigned_toolset_id` is the explicit pick
- * (null when none); `toolset_id` is the effective one including the fallback.
+ * A consumer is assigned at most one toolset (`toolset_id`). If they have none
+ * assigned they implicitly fall back to the `default` toolset, so every
+ * consumer always has exactly one *effective* toolset. `assigned_toolset_id`
+ * is the explicit pick (null when none); `toolset_id` is the effective one
+ * including the fallback.
  */
 export function enrichConsumer(db, c) {
-  const assigned = c.toolset_ids[0] ?? null;
+  const assigned = c.toolset_id ?? null;
   const toolsetId = assigned ?? "default";
   const ts = store.getToolset(db, toolsetId);
   const toolsetName = ts ? (ts.name ?? toolsetId) : toolsetId;
-  const tools = flattenConsumerTools(db, { toolset_ids: [toolsetId] });
+  const tools = flattenConsumerTools(db, c);
   return {
     id: c.id,
     user: c.user,
     host: c.host,
-    toolset_ids: c.toolset_ids,
-    toolset_names: [toolsetName],
+    toolset_id: c.toolset_id,
     assigned_toolset_id: assigned,
-    toolset_id: toolsetId,
+    effective_toolset_id: toolsetId,
     toolset_name: toolsetName,
     uses_default: !assigned,
     tool_ids: tools,

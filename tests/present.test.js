@@ -23,25 +23,25 @@ describe("presentation helpers", () => {
     expect(enriched.consumer_count).toBeGreaterThan(0);
   });
 
-  it("enrichConsumer returns toolset names and a flat tool list", () => {
+  it("enrichConsumer returns the single toolset and a flat tool list", () => {
     const db = freshDb();
     const c = store.getConsumer(db, "nick@nas");
     const enriched = enrichConsumer(db, c);
-    expect(enriched.toolset_names).toContain("Media");
+    expect(enriched.effective_toolset_id).toBe("media");
+    expect(enriched.toolset_name).toBe("Media");
+    expect(enriched.uses_default).toBe(false);
     expect(enriched.tool_ids).toEqual(["igdb", "jelu", "memos", "catalog"]);
     expect(enriched.flattened_tool_count).toBe(4);
   });
 
-  it("flattenConsumerTools is an ordered, deduped union", () => {
+  it("flattenConsumerTools falls back to the default toolset when none assigned", () => {
     const db = freshDb();
-    store.upsertConsumer(db, {
-      id: "x@y",
-      user: "x",
-      host: "y",
-      toolset_ids: ["dev", "container"],
-    });
+    store.upsertConsumer(db, { id: "x@y", user: "x", host: "y" });
     const c = store.getConsumer(db, "x@y");
-    expect(flattenConsumerTools(db, c)).toEqual(["github", "memos", "dozzle"]);
+    expect(flattenConsumerTools(db, c)).toEqual(["memos"]);
+    const enriched = enrichConsumer(db, c);
+    expect(enriched.effective_toolset_id).toBe("default");
+    expect(enriched.uses_default).toBe(true);
   });
 
   it("enrichTools includes a reverse lookup of toolsets per tool", () => {

@@ -17,7 +17,6 @@ export const actions = {
     const host = String(form.get("host") || "").trim();
     // Single toolset per consumer; "" / missing means fall back to default.
     const toolset = String(form.get("toolset") || "").trim();
-    const toolset_ids = toolset ? [toolset] : [];
 
     if (!user || !host)
       return fail(400, { error: "both host and user are required", toolset });
@@ -30,9 +29,8 @@ export const actions = {
         user,
         host,
         toolset,
-        toolset_ids,
       });
-    store.upsertConsumer(db, { id, user, host, toolset_ids });
+    store.upsertConsumer(db, { id, user, host, toolset_id: toolset || null });
 
     // Return to the toolset we were launched from, if any, else the new consumer.
     const fromToolset = String(form.get("from_toolset") || "").trim();

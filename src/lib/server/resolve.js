@@ -29,21 +29,11 @@ export function resolve(db, { user, host, task } = {}) {
   } else {
     const consumer =
       user && host ? store.getConsumer(db, `${user}@${host}`) : null;
-    // Each consumer is assigned at most one toolset; with none assigned they
-    // fall back to the `default` toolset (same as an unknown consumer).
-    const consumerToolsetIds = ["default"];
-    if (consumer && consumer.toolset_ids.length) {
-      consumerToolsetIds.length = 0;
-      consumerToolsetIds.push(...consumer.toolset_ids);
-    }
-    for (const tsId of consumerToolsetIds) {
-      const ts = store.getToolset(db, tsId);
-      if (ts) {
-        for (const tid of ts.tool_ids) {
-          if (!toolIds.includes(tid)) toolIds.push(tid);
-        }
-      }
-    }
+    // Each consumer has at most one toolset; with none assigned (or for an
+    // unknown consumer) they fall back to the `default` toolset.
+    const effective = consumer ? (consumer.toolset_id ?? "default") : "default";
+    const ts = store.getToolset(db, effective);
+    if (ts) toolIds = [...ts.tool_ids];
   }
 
   // Finalize: drop unknown tools, preserve order.

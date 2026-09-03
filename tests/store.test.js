@@ -52,11 +52,13 @@ describe("store CRUD (two-entity model)", () => {
       id: "nick@nas",
       user: "nick",
       host: "nas",
-      toolset_ids: ["media"],
+      toolset_id: "media",
     });
     const c = store.getConsumer(db, "nick@nas");
     expect(c.user).toBe("nick");
-    expect(c.toolset_ids).toEqual(["media"]);
+    expect(c.toolset_id).toBe("media");
+    store.upsertConsumer(db, { ...c, toolset_id: null });
+    expect(store.getConsumer(db, "nick@nas").toolset_id).toBeNull();
     store.deleteConsumer(db, "nick@nas");
     expect(store.getConsumer(db, "nick@nas")).toBeNull();
   });

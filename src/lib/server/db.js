@@ -60,6 +60,17 @@ export function migrate(conn) {
     conn.exec("ALTER TABLE toolsets RENAME TO toolsets_legacy");
   }
 
+  // Consumers used to carry a JSON list of toolsets (`toolset_ids_json`). Each
+  // consumer is now limited to a single nullable `toolset_id`; NULL falls back
+  // to the `default` toolset. The data is throwaway seed, so an old-shape
+  // table is dropped and rebuilt (and reseeded) rather than migrated.
+  if (
+    tableExists(conn, "consumers") &&
+    !columnExists(conn, "consumers", "toolset_id")
+  ) {
+    conn.exec("DROP TABLE consumers");
+  }
+
   conn.exec(`
     CREATE TABLE IF NOT EXISTS tools (
       id          TEXT PRIMARY KEY,
@@ -80,10 +91,10 @@ export function migrate(conn) {
     );
 
     CREATE TABLE IF NOT EXISTS consumers (
-      id               TEXT PRIMARY KEY,
-      user             TEXT NOT NULL,
-      host             TEXT NOT NULL,
-      toolset_ids_json TEXT NOT NULL DEFAULT '[]'
+      id        TEXT PRIMARY KEY,
+      user      TEXT NOT NULL,
+      host      TEXT NOT NULL,
+      toolset_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS settings (

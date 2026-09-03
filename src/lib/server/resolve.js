@@ -9,13 +9,13 @@ function booleanSetting(db, key, fallback) {
 /**
  * Resolution engine (spec §0 — the new two-entity model).
  *
- * There is no precedence layering. A consumer's resolved set is the literal
- * union of its assigned toolsets, in toolset order (deduplicated, order
- * preserved). Resolution order:
+ * Each consumer is assigned at most one toolset; a consumer with no toolset
+ * assigned falls back to the `default` toolset, so everyone has exactly one
+ * effective toolset. Resolution order:
  *   1. `task === "all"`        -> every known tool (escape hatch: `goose --full`).
  *   2. `task` names a toolset  -> that toolset, exactly (keeps the wrapper's
  *                                 `goose media` / `goose dev` quick selectors working).
- *   3. a consumer exists for `user@host` -> the consumer's assigned toolsets.
+ *   3. a consumer exists for `user@host` -> its effective toolset.
  *   4. otherwise (unknown consumer)      -> the `default` toolset.
  */
 export function resolve(db, { user, host, task } = {}) {
@@ -29,18 +29,20 @@ export function resolve(db, { user, host, task } = {}) {
   } else {
     const consumer =
       user && host ? store.getConsumer(db, `${user}@${host}`) : null;
-    if (consumer) {
-      for (const tsId of consumer.toolset_ids) {
-        const ts = store.getToolset(db, tsId);
-        if (ts) {
-          for (const tid of ts.tool_ids) {
-            if (!toolIds.includes(tid)) toolIds.push(tid);
-          }
+    // Each consumer is assigned at most one toolset; with none assigned they
+    // fall back to the `default` toolset (same as an unknown consumer).
+    const consumerToolsetIds = ["default"];
+    if (consumer && consumer.toolset_ids.length) {
+      consumerToolsetIds.length = 0;
+      consumerToolsetIds.push(...consumer.toolset_ids);
+    }
+    for (const tsId of consumerToolsetIds) {
+      const ts = store.getToolset(db, tsId);
+      if (ts) {
+        for (const tid of ts.tool_ids) {
+          if (!toolIds.includes(tid)) toolIds.push(tid);
         }
       }
-    } else {
-      const def = store.getToolset(db, "default");
-      if (def) toolIds = [...def.tool_ids];
     }
   }
 

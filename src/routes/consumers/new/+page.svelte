@@ -1,10 +1,12 @@
 <script>
 	let { data, form } = $props();
-	let selected = $state(form?.toolset_ids ?? (data.toolset ? [data.toolset] : []));
-	function toggle(id) {
-		if (selected.includes(id)) selected = selected.filter((x) => x !== id);
-		else selected = [...selected, id];
-	}
+	// Single toolset per consumer. "" means no explicit assignment — the
+	// consumer then gets the `default` toolset.
+	let requested = form?.toolset ?? data.toolset ?? "";
+	let selected = $state(requested === "default" ? "" : requested);
+	// The `default` toolset is the implicit fallback — you don't assign it
+	// explicitly, so it isn't offered as a pickable option.
+	let assignable = $derived(data.toolsets.filter((t) => t.id !== "default"));
 </script>
 
 <div class="spread">
@@ -27,7 +29,7 @@
 <div class="card" style="max-width:560px">
 	<form method="POST" action="?/create">
 		{#if data.toolset}
-			<input type="hidden" name="toolset" value={data.toolset} />
+			<input type="hidden" name="from_toolset" value={data.toolset} />
 		{/if}
 		<div class="row" style="align-items:flex-start">
 			<div style="flex:1">
@@ -40,26 +42,41 @@
 			</div>
 		</div>
 
-		<label>Assign toolsets</label>
-		{#if data.toolsets.length === 0}
-			<p class="muted small">Create a toolset first.</p>
-		{:else}
-			<div class="opts">
-				{#each data.toolsets as ts}
-					<label class="opt">
-						<input
-							type="checkbox"
-							name="toolset_ids"
-							value={ts.id}
-							checked={selected.includes(ts.id)}
-							onchange={() => toggle(ts.id)}
-						/>
-						<code>{ts.id}</code>
-						<span class="muted small">({ts.tool_ids.length} tools)</span>
-					</label>
-				{/each}
-			</div>
-		{/if}
+		<label>Assign a toolset</label>
+		<p class="muted small">
+			Each consumer gets one toolset. Leave it on
+			<span class="badge badge-default">default</span> to give them the fallback toolset.
+		</p>
+
+		<div class="opts">
+			<label class="opt">
+				<input
+					type="radio"
+					name="toolset"
+					value=""
+					checked={selected === ""}
+					onchange={() => (selected = "")}
+				/>
+				<span class="badge badge-default">default</span>
+				<span class="muted small">(no explicit toolset)</span>
+			</label>
+			{#each assignable as ts}
+				<label class="opt">
+					<input
+						type="radio"
+						name="toolset"
+						value={ts.id}
+						checked={selected === ts.id}
+						onchange={() => (selected = ts.id)}
+					/>
+					<code>{ts.id}</code>
+					<span class="muted small">({ts.tool_ids.length} tools)</span>
+				</label>
+			{/each}
+			{#if assignable.length === 0}
+				<p class="muted small">No other toolsets exist yet — create one to assign it.</p>
+			{/if}
+		</div>
 
 		<div class="mt-1">
 			<button class="primary" type="submit">Create consumer</button>
@@ -71,13 +88,13 @@
 <style>
 	.opts {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
+		flex-direction: column;
+		gap: 0.35rem;
 	}
 	.opt {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 0.5rem;
 		padding: 0.4rem 0.6rem;
 		border: 1px solid var(--border);
 		border-radius: 8px;

@@ -70,6 +70,7 @@
 					{#each data.toolsets as ts}
 						<tr
 							class="clickable"
+							class:row-default={ts.id === "default"}
 							tabindex="0"
 							onclick={() => go(`/toolsets/${encodeURIComponent(ts.id)}?tab=toolsets`)}
 							onkeydown={(e) => {
@@ -78,7 +79,12 @@
 							}}
 						>
 							<td>
-								<div class="cell-title"><code>{ts.name}</code></div>
+								<div class="cell-title">
+									<code>{ts.name}</code>
+									{#if ts.id === "default"}
+										<span class="badge badge-default">default</span>
+									{/if}
+								</div>
 								{#if ts.description}
 									<div class="muted small">{ts.description}</div>
 								{/if}
@@ -168,12 +174,13 @@
 								<a href="/consumers/{c.id}"><code>{c.id}</code></a>
 							</td>
 							<td>
-								{#each c.toolset_ids as id}
-									<span class="badge">{id}</span>
-								{/each}
-								{#if c.toolset_ids.length === 0}
-									<span class="muted small">(none)</span>
-								{/if}
+								<span
+									class="badge"
+									class:badge-default={c.uses_default}
+									title={c.uses_default
+										? "No toolset assigned — falls back to default"
+										: "Assigned toolset"}
+								>{c.toolset_id}</span>
 							</td>
 							<td class="num col-ctools">{c.flattened_tool_count}</td>
 							<td class="actions">
@@ -250,6 +257,12 @@
 	}
 	tr.clickable:hover td {
 		background: var(--panel-2);
+	}
+	tr.row-default td {
+		background: rgba(251, 191, 36, 0.06);
+	}
+	tr.row-default:hover td {
+		background: rgba(251, 191, 36, 0.1);
 	}
 	.cell-title {
 		display: flex;

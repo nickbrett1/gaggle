@@ -24,6 +24,16 @@ const data = {
       consumer_count: 0,
       uses_30d: 0,
     },
+    {
+      id: "default",
+      name: "Default",
+      description: "Baseline for every new host.",
+      tool_ids: ["memos"],
+      tool_names: ["Memos"],
+      consumers: ["bob@nas"],
+      consumer_count: 1,
+      uses_30d: 1,
+    },
   ],
   consumers: [
     {
@@ -32,8 +42,25 @@ const data = {
       host: "nas",
       toolset_ids: ["media"],
       toolset_names: ["Media"],
+      assigned_toolset_id: "media",
+      toolset_id: "media",
+      toolset_name: "Media",
+      uses_default: false,
       tool_ids: ["igdb", "jelu", "memos", "catalog"],
       flattened_tool_count: 4,
+    },
+    {
+      id: "bob@nas",
+      user: "bob",
+      host: "nas",
+      toolset_ids: [],
+      toolset_names: ["Default"],
+      assigned_toolset_id: null,
+      toolset_id: "default",
+      toolset_name: "Default",
+      uses_default: true,
+      tool_ids: ["memos"],
+      flattened_tool_count: 1,
     },
   ],
   tools: [
@@ -78,6 +105,32 @@ describe("landing dashboard", () => {
     expect(screen.getByText("nick@nas")).toBeTruthy();
   });
 
+  it("shows the error card when form.error is set", () => {
+    render(Landing, { props: { data, form: { error: "boom" } } });
+    expect(screen.getByText("boom")).toBeTruthy();
+  });
+
+  it("renders empty-state messages when lists are empty", () => {
+    const emptyData = { toolsets: [], consumers: [], tools: [] };
+    render(Landing, { props: { data: emptyData } });
+    expect(screen.getByText(/No toolsets yet/)).toBeTruthy();
+  });
+
+  it("highlights the default toolset in the toolsets listing", () => {
+    render(Landing, { props: { data } });
+    expect(screen.getByText("default")).toBeTruthy();
+  });
+
+  it("shows each consumer's effective toolset (default fallback included)", async () => {
+    render(Landing, { props: { data } });
+    const tabs = screen.getAllByRole("tab");
+    await fireEvent.click(tabs[2]);
+    // bob has no explicit toolset -> falls back to `default`, shown as a badge.
+    expect(screen.getByText("nick@nas")).toBeTruthy();
+    expect(screen.getByText("bob@nas")).toBeTruthy();
+    expect(screen.getAllByText("default").length).toBeGreaterThan(0);
+  });
+
   it("navigates to a toolset when a row is clicked", async () => {
     const href = vi.fn();
     Object.defineProperty(window, "location", {
@@ -92,16 +145,5 @@ describe("landing dashboard", () => {
     expect(window.location.href).toContain("/toolsets/media");
     href();
     expect(href).toHaveBeenCalled();
-  });
-
-  it("shows the error card when form.error is set", () => {
-    render(Landing, { props: { data, form: { error: "boom" } } });
-    expect(screen.getByText("boom")).toBeTruthy();
-  });
-
-  it("renders empty-state messages when lists are empty", () => {
-    const emptyData = { toolsets: [], consumers: [], tools: [] };
-    render(Landing, { props: { data: emptyData } });
-    expect(screen.getByText(/No toolsets yet/)).toBeTruthy();
   });
 });

@@ -16,7 +16,9 @@ export function load({ params }) {
 export const actions = {
   save: async ({ request, params }) => {
     const form = await request.formData();
-    const toolset_ids = form.getAll("toolset_ids").map(String);
+    // Single toolset per consumer; "" / missing means fall back to default.
+    const toolset = String(form.get("toolset") || "").trim();
+    const toolset_ids = toolset ? [toolset] : [];
     const db = getDb();
     const existing = store.getConsumer(db, params.id);
     if (!existing) throw error(404, "Consumer not found");

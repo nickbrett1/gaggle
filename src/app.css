@@ -7,6 +7,7 @@
   --accent: #38bdf8;
   --border: #334155;
   --danger: #f87171;
+  --default: #fbbf24;
 }
 
 * {
@@ -132,6 +133,15 @@ button.danger,
   border: 1px solid var(--border);
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* The `default` toolset is special: consumers with no toolset assigned fall
+   back to it. Highlight it so it reads as distinct from a normal toolset. */
+.badge.badge-default {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: var(--default);
+  color: var(--default);
+  font-weight: 600;
 }
 
 .row {

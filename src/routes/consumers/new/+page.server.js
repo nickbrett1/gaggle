@@ -15,9 +15,9 @@ export const actions = {
     const form = await request.formData();
     const user = String(form.get("user") || "").trim();
     const host = String(form.get("host") || "").trim();
+    // Single toolset per consumer; "" / missing means fall back to default.
     const toolset = String(form.get("toolset") || "").trim();
-    let toolset_ids = form.getAll("toolset_ids").map(String);
-    if (toolset && !toolset_ids.includes(toolset)) toolset_ids.push(toolset);
+    const toolset_ids = toolset ? [toolset] : [];
 
     if (!user || !host)
       return fail(400, { error: "both host and user are required", toolset });
@@ -34,8 +34,10 @@ export const actions = {
       });
     store.upsertConsumer(db, { id, user, host, toolset_ids });
 
-    if (toolset && store.getToolset(db, toolset))
-      throw redirect(303, `/toolsets/${encodeURIComponent(toolset)}`);
+    // Return to the toolset we were launched from, if any, else the new consumer.
+    const fromToolset = String(form.get("from_toolset") || "").trim();
+    if (fromToolset && store.getToolset(db, fromToolset))
+      throw redirect(303, `/toolsets/${encodeURIComponent(fromToolset)}`);
     throw redirect(303, `/consumers/${encodeURIComponent(id)}`);
   },
 };

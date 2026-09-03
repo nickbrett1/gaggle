@@ -76,7 +76,9 @@ describe("generated app smoke test", () => {
     const listBody = await list.json();
     const names = listBody.result.tools.map((t) => t.name);
     expect(names).toContain("list_resolve_events");
-    expect(names).toContain("estimated_tool_count");
+    expect(names).toContain("list_tools");
+    expect(names).toContain("list_toolsets");
+    expect(names).toContain("list_consumers");
   });
 
   it("mcp tools/call returns events and the log API returns them", async () => {

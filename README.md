@@ -15,37 +15,34 @@ MCPs across many hosts as one unit.
 
 ## The model (two entities, no precedence)
 
-This is a deliberately flat, two-entity model — **no inheritance, no fallback,
-no precedence layering**.
+This is a deliberately flat, two-entity model — **no precedence layering**.
 
 - **Tool** — a registered MCP or builtin tool, with its full config
   (`kind`, `transport`, and `url` or `command/args/env`).
 - **Toolset** — a named list of tools (membership is stored and served in
   alphabetical order — no manual ordering).
-- **Consumer** — a `host + user` pair (e.g. `nick@nas`) that is **directly
-  assigned one or more toolsets**.
+- **Consumer** — a `host + user` pair (e.g. `nick@nas`) that is assigned
+  **at most one toolset**; with none assigned it falls back to the `default`
+  toolset, so every consumer has exactly one effective toolset.
 
-A consumer's resolved set is the **literal union of its assigned toolsets, in
-toolset assignment order** (deduplicated; each toolset's own tools are served
-alphabetically). `nick@macstudio` and
-`nick@nas` are completely independent. `task` is retained only as a legacy
-wrapper convenience: `task` naming a toolset selects that toolset directly
-(`goose media`, `goose dev`), and `task=all` is the `goose --full` escape hatch
-that returns every known tool.
+`nick@macstudio` and `nick@nas` are completely independent. `task` is retained
+only as a legacy wrapper convenience: `task` naming a toolset selects that
+toolset directly (`goose media`, `goose dev`), and `task=all` is the
+`goose --full` escape hatch that returns every known tool.
 
 ## What it does
 
-| Route                    | Purpose                                              |
-| ------------------------ | ---------------------------------------------------- |
-| `GET /resolve?user&host` | Resolved tool set + params (JSON) — consumer's union |
-| `GET /config?user&host`  | Ready-to-write Goose config file (text/plain)        |
-| `GET /api/log`           | Resolve-event request log (JSON, filterable)         |
-| `POST /mcp`              | Analytics MCP (streamable-HTTP)                      |
-| `/`                      | Console landing — the two questions (dashboard)      |
-| `/toolsets`              | Console — manage tools within a toolset (op #1)      |
-| `/consumers`             | Console — assign toolsets to a consumer (op #2)      |
-| `/tools`                 | Console — tool catalog (op #3)                       |
-| `/log`                   | Console — Activity (append-only, read-only)          |
+| Route                    | Purpose                                               |
+| ------------------------ | ----------------------------------------------------- |
+| `GET /resolve?user&host` | Resolved tool set + params (JSON) — effective toolset |
+| `GET /config?user&host`  | Ready-to-write Goose config file (text/plain)         |
+| `GET /api/log`           | Resolve-event request log (JSON, filterable)          |
+| `POST /mcp`              | gaggle MCP (streamable-HTTP): activity + admin tools  |
+| `/`                      | Console landing — the two questions (dashboard)       |
+| `/toolsets`              | Console — manage tools within a toolset (op #1)       |
+| `/consumers`             | Console — assign a consumer's toolset (op #2)         |
+| `/tools`                 | Console — tool catalog (op #3)                        |
+| `/log`                   | Console — Activity (append-only, read-only)           |
 
 ### The two landing-page questions
 
@@ -53,13 +50,15 @@ The dashboard answers both at a glance:
 
 1. **Toolset-oriented:** what toolsets exist, what tools are in each, and which
    consumers receive each.
-2. **Consumer-oriented:** what each consumer resolves to (which toolsets →
-   which tools).
+2. **Consumer-oriented:** what each consumer resolves to (its one effective
+   toolset → which tools).
 
 ### Resolution
 
-- A consumer resolves to the **ordered union of its assigned toolsets**.
-- Unknown consumer → the `default` toolset.
+- Each consumer is assigned **at most one toolset**; they resolve to exactly
+  that toolset.
+- A consumer with no toolset assigned (and an unknown consumer) → the
+  `default` toolset.
 - `task` naming a toolset → that toolset, exactly.
 - `task=all` → every known tool.
 
@@ -67,11 +66,11 @@ Every `/resolve` and `/config` call is logged to SQLite (append-only history).
 
 ### The three operations (primary workflows)
 
-1. **Manage tools within a toolset** — add/remove/reorder tools, create/edit/
-   rename/delete toolsets. Deleting a toolset warns about consumers that will
-   lose it.
-2. **Assign toolsets to a consumer** — edit which toolsets a `host+user` pair
-   receives, with a live "what resolves" preview.
+1. **Manage tools within a toolset** — add/remove tools (served
+   alphabetically), and create/edit/rename/delete toolsets. Deleting a toolset
+   clears it from consumers, who fall back to `default`.
+2. **Assign a toolset to a consumer** — pick the single toolset a `host+user`
+   pair gets; leave it unset to fall back to `default`.
 3. **Add a new tool** — register an MCP/builtin tool with its full config
    upfront; a tool must exist in the catalog before it can be added to a
    toolset. Deleting a tool warns about toolsets that still include it.
@@ -87,8 +86,9 @@ dangerous deletes warn; tools are served alphabetically.
   with a TTL cache + offline fallback, syncs `nickbrett1/goose-recipes`
   (default on, `GOOSE_NO_RECIPES=1` to disable), and routes through the
   Multi-Session Worktree workflow when enabled.
-- **Analytics MCP** — exposes the resolve log: top tools by host, per-task
-  usage, never-requested tools, estimated tool-count per set.
+- **gaggle MCP** — exposes `list_resolve_events` (activity) plus admin tools
+  (`list_*` / `upsert_*` / `delete_*` over tools, toolsets and consumers) so an
+  agent can do what the console UI does.
 
 ## Constraint ledger (honored)
 

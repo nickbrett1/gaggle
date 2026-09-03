@@ -1,14 +1,16 @@
 import { getDb } from "$lib/server/db.js";
-import { TOOLS, callTool } from "$lib/server/analytics.js";
+import { TOOLS, callTool } from "$lib/server/mcp-tools.js";
 
 /**
- * gaggle analytics MCP — served as a streamable-HTTP endpoint on the same
- * SvelteKit server (spec §3 / §7). Implements the JSON-RPC methods needed for
- * tool listing + invocation: initialize, notifications/initialized, ping,
- * tools/list, tools/call.
+ * gaggle MCP — served as a streamable-HTTP endpoint on the same SvelteKit
+ * server (spec §3 / §7). Exposes the activity log plus admin tools (view /
+ * upsert / delete tools, toolsets and consumers) so an agent can do what the
+ * console UI does. Implements the JSON-RPC methods needed for tool listing +
+ * invocation: initialize, notifications/initialized, ping, tools/list,
+ * tools/call.
  */
 
-const SERVER_INFO = { name: "gaggle-analytics", version: "1.0.0" };
+const SERVER_INFO = { name: "gaggle", version: "2.0.0" };
 const PROTOCOL_VERSION = "2025-06-18";
 
 function corsHeaders() {

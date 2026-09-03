@@ -123,6 +123,11 @@ export function upsertToolset(db, ts) {
 
 export function deleteToolset(db, id) {
   db.prepare("DELETE FROM toolsets WHERE id = ?").run(id);
+  // Consumers assigned to this toolset now have nothing explicit — they fall
+  // back to the `default` toolset.
+  db.prepare("UPDATE consumers SET toolset_id = NULL WHERE toolset_id = ?").run(
+    id,
+  );
 }
 
 // ---------------------------------------------------------------------------

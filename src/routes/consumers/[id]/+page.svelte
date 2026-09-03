@@ -67,7 +67,11 @@
 
 <div class="card">
 	<h3>Danger zone</h3>
-	<p class="muted small">Deleting this consumer stops them from resolving any tools.</p>
+	<p class="muted small">
+		Deleting this consumer removes their toolset assignment. This isn't a block —
+		if <code>{consumer.id}</code> queries again they'll be treated as unknown and
+		receive the <span class="badge badge-default">default</span> toolset.
+	</p>
 	<form method="POST" action="?/delete">
 		<button class="danger" type="submit" onclick={() => confirm(`Delete consumer ${consumer.id}? This is permanent.`)}>
 			Delete consumer {consumer.id}

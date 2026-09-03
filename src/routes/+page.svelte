@@ -162,7 +162,7 @@
 				<thead>
 					<tr>
 						<th>Consumer</th>
-						<th>Toolsets</th>
+						<th>Toolset</th>
 						<th class="num col-ctools">Tools</th>
 						<th></th>
 					</tr>
@@ -184,16 +184,43 @@
 							</td>
 							<td class="num col-ctools">{c.flattened_tool_count}</td>
 							<td class="actions">
-								<a class="btn" href="/consumers/{c.id}">Edit</a>
+								<a
+									class="icon-btn"
+									href="/consumers/{c.id}"
+									aria-label="Edit {c.id}"
+									title="Edit consumer"
+								>
+									<svg
+										viewBox="0 0 24 24"
+										width="16"
+										height="16"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
+								</a>
 								<form method="POST" action="?/deleteConsumer">
 									<input type="hidden" name="id" value={c.id} />
 									<input type="hidden" name="tab" value="consumers" />
 									<button
-										class="danger"
+										class="icon-btn danger"
 										type="submit"
+										aria-label="Delete {c.id}"
+										title="Delete consumer"
 										onclick={() => confirm(`Delete consumer "${c.id}"? This is permanent.`)}
 									>
-										Delete
+										<svg
+											viewBox="0 0 24 24"
+											width="16"
+											height="16"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 									</button>
 								</form>
 							</td>
@@ -270,12 +297,42 @@
 		gap: 0.4rem;
 	}
 	.actions {
-		text-align: right;
+		display: inline-flex;
+		gap: 0.15rem;
+		justify-content: flex-end;
+		align-items: center;
 		white-space: nowrap;
 	}
 	.actions form {
-		display: inline-block;
+		display: inline-flex;
 		margin: 0;
+	}
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border: 1px solid transparent;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--muted);
+		cursor: pointer;
+		line-height: 0;
+	}
+	.icon-btn:hover {
+		color: var(--text);
+		background: var(--panel-2);
+		border-color: var(--border);
+	}
+	.icon-btn.danger:hover {
+		color: var(--danger);
+		border-color: var(--danger);
+		background: rgba(248, 113, 113, 0.08);
+	}
+	.icon-btn svg {
+		display: block;
 	}
 	.err {
 		border-color: var(--danger);

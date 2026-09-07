@@ -1,5 +1,25 @@
 # gaggle 🪿
 
+> ## ⚠️ Abandoned — superseded by MCPHub
+>
+> **This project has been abandoned.** gaggle's role as the central MCP
+> configuration resolver/gateway was replaced in favor of **MCPHub**, which was
+> adopted as the single MCP gateway on the same NAS. This repository is kept
+> **for reference only** and is no longer developed, deployed, or maintained.
+>
+> **What happened:** on 2026-09-06 the rollout moved off gaggle — MCPHub now
+> runs as the gateway (container on `nas:8781`), with all servers connected and
+> organized into groups that mirror gaggle's old toolsets. The NAS `goose` CLI
+> was converted to access only MCPHub group endpoints, fully replacing
+> gaggle's per-launch `resolve`/`config` flow.
+>
+> Please **do not build new work on top of this repository.** The content below
+> is preserved as historical documentation only.
+
+---
+
+## Original design (archived)
+
 Central agent/MCP configuration resolver. A single server answers **"for this
 `{user, host}`, which Goose extensions should be loaded, and with what
 config?"** A `goose` shell wrapper on every host queries it per-launch, writes
